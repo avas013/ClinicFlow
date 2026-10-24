@@ -1,0 +1,52 @@
+<script setup>
+import { ref, computed } from 'vue'
+import { clinic, staff, day, niceDate, niceTime, ordered } from '../shared/demoStore.js'
+
+const tab = ref('overview')
+const period = ref('all')
+const rows = computed(() => clinic.appointments.filter(a => period.value === 'all' || a.date === day()))
+const total = computed(() => rows.value.length)
+const cancelled = computed(() => rows.value.filter(a => a.status === 'Cancelled').length)
+const checked = computed(() => rows.value.filter(a => a.status === 'Checked in').length)
+const completed = computed(() => rows.value.filter(a => a.status === 'Completed').length)
+const rate = computed(() => total.value ? Math.round(cancelled.value / total.value * 100) : 0)
+const perDoctor = computed(() => staff.map(s => ({ ...s, count: rows.value.filter(a => a.doctor === s.name).length })))
+const maxCount = computed(() => Math.max(1, ...perDoctor.value.map(s => s.count)))
+function downloadReport() {
+  const header = ['Patient', 'Clinician', 'Date', 'Time', 'Visit type', 'Status']
+  const cells = ordered(rows.value).map(a => [a.patient, a.doctor, a.date, a.time, a.reason, a.status])
+  const csv = [header, ...cells].map(row => row.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'ClinicFlow_demo_report.csv'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+</script>
+
+<template>
+  <div class="admin-screen">
+    <div class="admin-wrap">
+      <div class="admin-heading"><div><p class="admin-overline">ADMINISTRATOR PORTAL</p><h1>Clinic overview</h1><p class="admin-muted">Operational insights · Fictional sample data</p></div><div class="admin-controls"><label>Reporting period<select v-model="period"><option value="all">All demo dates</option><option value="today">Today only</option></select></label><button class="admin-export" @click="downloadReport">Export CSV ↗</button></div></div>
+      <div class="admin-stats">
+        <article><span>Total appointments</span><strong>{{ total }}</strong><small>Selected reporting period</small></article>
+        <article><span>Checked in</span><strong>{{ checked }}</strong><small>Waiting to be seen</small></article>
+        <article><span>Completed</span><strong>{{ completed }}</strong><small>Finished visits</small></article>
+        <article><span>Cancellation rate</span><strong>{{ rate }}%</strong><small>{{ cancelled }} cancellations</small></article>
+      </div>
+      <nav class="admin-tabs" aria-label="Administrator dashboard views"><button v-for="t in [['overview','Overview'],['staff','Staff schedule'],['reports','Reports']]" :key="t[0]" :class="{ active: tab===t[0] }" @click="tab=t[0]">{{ t[1] }}</button></nav>
+      <div v-if="tab === 'overview'" class="admin-grid">
+        <section class="admin-panel"><div class="admin-panel-head"><div><h2>Appointments by clinician</h2><p>Distribution across your staff</p></div></div><div v-for="person in perDoctor" :key="person.name" class="admin-bar-row"><div><strong>{{ person.name }}</strong><span>{{ person.count }} visits</span></div><div class="admin-track"><span :style="{ width: (person.count/maxCount*100) + '%' }"></span></div></div></section>
+        <section class="admin-panel"><div class="admin-panel-head"><div><h2>Appointment status</h2><p>Live summary from demo data</p></div></div><div v-for="status in ['Scheduled','Checked in','In progress','Completed','Cancelled','No show']" :key="status" class="admin-status-row"><span>{{ status }}</span><strong>{{ rows.filter(a => a.status === status).length }}</strong></div></section>
+      </div>
+      <section v-else-if="tab === 'staff'" class="admin-panel"><div class="admin-panel-head"><div><h2>Staff schedule</h2><p>Example assignments for {{ niceDate(day()) }}</p></div></div><div class="admin-table-wrap"><table><thead><tr><th>Staff member</th><th>Role</th><th>Hours</th><th>Room</th><th>Appointments</th></tr></thead><tbody><tr v-for="person in perDoctor" :key="person.name"><td><strong>{{ person.name }}</strong></td><td>{{ person.role }}</td><td>{{ person.shift }}</td><td>{{ person.room }}</td><td>{{ person.count }}</td></tr></tbody></table></div></section>
+      <section v-else class="admin-panel"><div class="admin-panel-head"><div><h2>Appointment report</h2><p>Changes made in Front Desk and Doctor/Nurse appear here.</p></div><button class="admin-export" @click="downloadReport">Download CSV</button></div><div class="admin-table-wrap"><table><thead><tr><th>Patient</th><th>Date</th><th>Clinician</th><th>Type</th><th>Status</th></tr></thead><tbody><tr v-for="a in ordered(rows)" :key="a.id"><td>{{ a.patient }}</td><td>{{ niceDate(a.date) }} · {{ niceTime(a.time) }}</td><td>{{ a.doctor }}</td><td>{{ a.reason }}</td><td><span class="admin-chip" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td></tr></tbody></table></div><p v-if="!rows.length" class="admin-muted">No records in this period.</p></section>
+      <p class="admin-footer">No clinical diagnoses, medical records or personal health data are stored in this demonstration.</p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.admin-screen{min-height:100dvh;background:#f3f6fa;color:#22384c;font:14px Inter,Arial,sans-serif}.admin-wrap{max-width:1200px;margin:auto;padding:36px 22px 55px}.admin-heading{display:flex;justify-content:space-between;align-items:end;gap:20px}.admin-overline{letter-spacing:1.7px;font-size:11px;color:#2773a8;font-weight:800;margin:0 0 9px}.admin-heading h1{font-size:clamp(27px,4vw,36px);letter-spacing:-1px;margin:0}.admin-muted{color:#8092a3;margin:9px 0 0}.admin-controls{display:flex;align-items:end;gap:11px}.admin-controls label{display:grid;gap:7px;font-size:12px;font-weight:700;color:#60768b}.admin-controls select{padding:10px 12px;border:1px solid #cad9e6;border-radius:8px;background:#fff;color:#31495d}.admin-export{background:#2874ac;color:#fff;border:1px solid #2874ac;border-radius:8px;padding:11px 14px;white-space:nowrap;font-weight:700}.admin-export:hover{background:#1e5f91}.admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:28px 0}.admin-stats article{background:#fff;border:1px solid #e0e9f1;border-radius:13px;padding:21px}.admin-stats span,.admin-stats small{display:block;color:#71879b;font-size:12px}.admin-stats strong{display:block;font-size:35px;color:#246ca4;margin:8px 0}.admin-tabs{border-bottom:1px solid #d7e2eb;display:flex;gap:6px}.admin-tabs button{padding:13px 18px;background:none;border:0;border-bottom:3px solid transparent;color:#698199;font-weight:700}.admin-tabs button.active{border-bottom-color:#2474ae;color:#226398}.admin-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}.admin-panel{padding:24px;margin-bottom:20px;min-height:260px;background:#fff;border:1px solid #e1eaf2;border-radius:0 0 13px 13px}.admin-grid .admin-panel{border-radius:0 0 13px 13px}.admin-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:25px}.admin-panel-head h2{font-size:19px;margin:0}.admin-panel-head p{color:#7e8da0;margin:7px 0 0;font-size:12px}.admin-bar-row{margin-bottom:22px}.admin-bar-row>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:9px}.admin-bar-row span{color:#74889a}.admin-track{height:11px;border-radius:20px;background:#e9f0f6;overflow:hidden}.admin-track span{display:block;background:#3381b9;height:100%;border-radius:20px}.admin-status-row{display:flex;justify-content:space-between;padding:12px 2px;border-bottom:1px solid #ecf2f5}.admin-status-row strong{color:#2b6594}.admin-table-wrap{overflow-x:auto}table{border-collapse:collapse;text-align:left;width:100%;min-width:690px}th{background:#f5f8fb;text-transform:uppercase;color:#8291a0;letter-spacing:.7px;font-size:11px;padding:14px}td{padding:15px 14px;border-bottom:1px solid #ecf0f4}.admin-chip{display:inline-block;border-radius:30px;padding:5px 9px;background:#edf2f6;color:#677b8c;font-size:11px;font-weight:700}.admin-chip.checked-in{background:#e6f7ee;color:#177a4c}.admin-chip.cancelled,.admin-chip.no-show{background:#ffefeb;color:#ae4f43}.admin-chip.completed{background:#e5f8f0;color:#147344}.admin-chip.in-progress{background:#e6f1ff;color:#246ca7}.admin-footer{color:#8494a5;font-size:12px;text-align:center;margin-top:23px}@media(max-width:750px){.admin-wrap{padding:25px 13px}.admin-heading{align-items:stretch;flex-direction:column}.admin-controls{justify-content:space-between}.admin-stats{grid-template-columns:repeat(2,1fr);gap:9px}.admin-stats article{padding:14px}.admin-stats strong{font-size:28px}.admin-grid{grid-template-columns:1fr;gap:0}.admin-panel{padding:18px 13px}.admin-tabs button{padding:12px 10px;font-size:12px}}
+</style>
