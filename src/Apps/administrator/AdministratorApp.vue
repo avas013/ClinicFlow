@@ -19,7 +19,7 @@ function downloadReport() {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = 'ClinicFlow_demo_report.csv'
+  link.download = 'ClinicFlow_appointment_report.csv'
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -28,7 +28,7 @@ function downloadReport() {
 <template>
   <div class="admin-screen">
     <div class="admin-wrap">
-      <div class="admin-heading"><div><p class="admin-overline">ADMINISTRATOR PORTAL</p><h1>Clinic overview</h1><p class="admin-muted">Operational insights · Fictional sample data</p></div><div class="admin-controls"><label>Reporting period<select v-model="period"><option value="all">All demo dates</option><option value="today">Today only</option></select></label><button class="admin-export" @click="downloadReport">Export CSV ↗</button></div></div>
+      <div class="admin-heading"><div><p class="admin-overline">ADMINISTRATOR PORTAL</p><h1>Clinic overview</h1><p class="admin-muted">Operational insights</p></div><div class="admin-controls"><label>Reporting period<select v-model="period"><option value="all">All dates</option><option value="today">Today only</option></select></label><button class="admin-export" @click="downloadReport">Export CSV ↗</button></div></div>
       <div class="admin-stats">
         <article><span>Total appointments</span><strong>{{ total }}</strong><small>Selected reporting period</small></article>
         <article><span>Checked in</span><strong>{{ checked }}</strong><small>Waiting to be seen</small></article>
@@ -38,11 +38,11 @@ function downloadReport() {
       <nav class="admin-tabs" aria-label="Administrator dashboard views"><button v-for="t in [['overview','Overview'],['staff','Staff schedule'],['reports','Reports']]" :key="t[0]" :class="{ active: tab===t[0] }" @click="tab=t[0]">{{ t[1] }}</button></nav>
       <div v-if="tab === 'overview'" class="admin-grid">
         <section class="admin-panel"><div class="admin-panel-head"><div><h2>Appointments by clinician</h2><p>Distribution across your staff</p></div></div><div v-for="person in perDoctor" :key="person.name" class="admin-bar-row"><div><strong>{{ person.name }}</strong><span>{{ person.count }} visits</span></div><div class="admin-track"><span :style="{ width: (person.count/maxCount*100) + '%' }"></span></div></div></section>
-        <section class="admin-panel"><div class="admin-panel-head"><div><h2>Appointment status</h2><p>Live summary from demo data</p></div></div><div v-for="status in ['Scheduled','Checked in','In progress','Completed','Cancelled','No show']" :key="status" class="admin-status-row"><span>{{ status }}</span><strong>{{ rows.filter(a => a.status === status).length }}</strong></div></section>
+        <section class="admin-panel"><div class="admin-panel-head"><div><h2>Appointment status</h2><p>Live appointment summary</p></div></div><div v-for="status in ['Scheduled','Checked in','In progress','Completed','Cancelled','No show']" :key="status" class="admin-status-row"><span>{{ status }}</span><strong>{{ rows.filter(a => a.status === status).length }}</strong></div></section>
       </div>
-      <section v-else-if="tab === 'staff'" class="admin-panel"><div class="admin-panel-head"><div><h2>Staff schedule</h2><p>Example assignments for {{ niceDate(day()) }}</p></div></div><div class="admin-table-wrap"><table><thead><tr><th>Staff member</th><th>Role</th><th>Hours</th><th>Room</th><th>Appointments</th></tr></thead><tbody><tr v-for="person in perDoctor" :key="person.name"><td><strong>{{ person.name }}</strong></td><td>{{ person.role }}</td><td>{{ person.shift }}</td><td>{{ person.room }}</td><td>{{ person.count }}</td></tr></tbody></table></div></section>
-      <section v-else class="admin-panel"><div class="admin-panel-head"><div><h2>Appointment report</h2><p>Changes made in Front Desk and Doctor/Nurse appear here.</p></div><button class="admin-export" @click="downloadReport">Download CSV</button></div><div class="admin-table-wrap"><table><thead><tr><th>Patient</th><th>Date</th><th>Clinician</th><th>Type</th><th>Status</th></tr></thead><tbody><tr v-for="a in ordered(rows)" :key="a.id"><td>{{ a.patient }}</td><td>{{ niceDate(a.date) }} · {{ niceTime(a.time) }}</td><td>{{ a.doctor }}</td><td>{{ a.reason }}</td><td><span class="admin-chip" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td></tr></tbody></table></div><p v-if="!rows.length" class="admin-muted">No records in this period.</p></section>
-      <p class="admin-footer">No clinical diagnoses, medical records or personal health data are stored in this demonstration.</p>
+      <section v-else-if="tab === 'staff'" class="admin-panel"><div class="admin-panel-head"><div><h2>Staff schedule</h2><p>Assignments for {{ niceDate(day()) }}</p></div></div><div class="admin-table-wrap"><table><thead><tr><th>Staff member</th><th>Role</th><th>Hours</th><th>Room</th><th>Appointments</th></tr></thead><tbody><tr v-for="person in perDoctor" :key="person.name"><td><strong>{{ person.name }}</strong></td><td>{{ person.role }}</td><td>{{ person.shift }}</td><td>{{ person.room }}</td><td>{{ person.count }}</td></tr></tbody></table></div></section>
+      <section v-else class="admin-panel"><div class="admin-panel-head"><div><h2>Appointment report</h2><p>Changes made in Front Desk and Doctor/Nurse appear here.</p></div><button class="admin-export" @click="downloadReport">Download CSV</button></div><div class="admin-table-wrap"><table><thead><tr><th>Patient</th><th>Date</th><th>Clinician</th><th>Type</th><th>Status</th><th>Confirmed</th></tr></thead><tbody><tr v-for="a in ordered(rows)" :key="a.id"><td>{{ a.patient }}</td><td>{{ niceDate(a.date) }} · {{ niceTime(a.time) }}</td><td>{{ a.doctor }}</td><td>{{ a.reason }}</td><td><span class="admin-chip" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td><td>{{ a.confirmed ? 'Yes' : 'No' }}</td></tr></tbody></table></div><p v-if="!rows.length" class="admin-muted">No records in this period.</p></section>
+      <p class="admin-footer"></p>
     </div>
   </div>
 </template>
