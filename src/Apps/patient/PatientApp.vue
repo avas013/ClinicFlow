@@ -1,97 +1,57 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import { clinic, book, confirmAppointment, niceDate, niceTime, staff, queue } from '../shared/demoStore.js'
 
-// Demo data: nothing here is connected to a clinic or database yet.
-const appointments = ref([
-  { id: 1, doctor: 'Dr. Smith', time: '8:30 AM', date: 'January 4, 2027', dateTime: '2027-01-04T08:30:00' },
-])
-const queuePosition = ref(1)
-
-// Display all appointments when there are at most 3. With 4 or more,
-// show only 2 on Home and provide a separate scrollable full list.
-const sortedAppointments = computed(() =>
-  [...appointments.value].sort((a, b) => a.dateTime.localeCompare(b.dateTime)),
-)
+const patientName = 'Jordan Taylor'
+const queuePosition = computed(() => queue().findIndex(a => a.patient === patientName) + 1)
+const appointments = computed(() => clinic.appointments.filter(a =>
+  a.patient.toLowerCase() === patientName.toLowerCase() &&
+  !['Cancelled', 'Completed', 'No show'].includes(a.status)
+))
+const sortedAppointments = computed(() => [...appointments.value].sort((a,b) =>
+  `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)))
 const hasMoreAppointments = computed(() => sortedAppointments.value.length > 3)
-const homeAppointments = computed(() =>
-  hasMoreAppointments.value
-    ? sortedAppointments.value.slice(0, 2)
-    : sortedAppointments.value,
-)
-
+const homeAppointments = computed(() => hasMoreAppointments.value
+  ? sortedAppointments.value.slice(0, 2) : sortedAppointments.value)
 const currentPage = ref('home')
 const pageHistory = ref([])
 const statusMessage = ref('')
 const feedbackSent = ref(false)
-
 const booking = reactive({ doctor: 'Dr. Smith', date: '', time: '' })
 const feedback = reactive({ rating: '', message: '' })
-
-const minDate = (() => {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const day = String(today.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-})()
-
+const minDate = new Date().toLocaleDateString('en-CA')
 const queueLabel = computed(() => {
   const n = queuePosition.value
-  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' :
-    n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'
+  if (n < 1) return 'Not currently in line'
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'
   return `${n}${suffix} in line`
 })
-
 function openPage(page) {
   if (currentPage.value === page) return
   pageHistory.value.push(currentPage.value)
   currentPage.value = page
   statusMessage.value = ''
 }
-
-function goHome() {
-  currentPage.value = 'home'
-  pageHistory.value = []
-}
-
+function goHome() { currentPage.value = 'home'; pageHistory.value = [] }
 function goBack() {
-  if (pageHistory.value.length > 0) {
-    currentPage.value = pageHistory.value.pop()
-  } else {
-    statusMessage.value = 'You are already on the home screen.'
-  }
+  if (pageHistory.value.length) currentPage.value = pageHistory.value.pop()
+  else statusMessage.value = 'You are already on the home screen.'
 }
-
 function saveBooking() {
-  const dateTime = new Date(`${booking.date}T${booking.time}:00`)
-  if (Number.isNaN(dateTime.getTime()) || dateTime <= new Date()) {
+  const dt = new Date(`${booking.date}T${booking.time}:00`)
+  if (Number.isNaN(dt.getTime()) || dt <= new Date()) {
     statusMessage.value = 'Choose an appointment date and time in the future.'
     return
   }
-
-  appointments.value.push({
-    id: Date.now(),
-    doctor: booking.doctor,
-    dateTime: `${booking.date}T${booking.time}:00`,
-    date: new Intl.DateTimeFormat('en-CA', {
-      month: 'long', day: 'numeric', year: 'numeric',
-    }).format(dateTime),
-    time: new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric', minute: '2-digit', hour12: true,
-    }).format(dateTime),
-  })
-
-  booking.date = ''
-  booking.time = ''
+  book({ patient: patientName, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
+  booking.date = ''; booking.time = ''
   goHome()
-  statusMessage.value = 'Demo appointment added. Changes will reset when you refresh.'
+  statusMessage.value = 'Appointment booked. Please confirm your attendance.'
 }
-
-function submitFeedback() {
-  feedbackSent.value = true
-  feedback.rating = ''
-  feedback.message = ''
+function confirm(id) {
+  if (confirmAppointment(id, patientName)) statusMessage.value = 'Appointment confirmed.'
 }
+function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; feedback.message = '' }
 </script>
 
 <template>
@@ -119,8 +79,12 @@ function submitFeedback() {
                   <strong>{{ appointment.doctor }}</strong>
                 </div>
                 <div class="appointment-right">
-                  <strong>{{ appointment.time }}</strong>
-                  <span>{{ appointment.date }}</span>
+                  <strong>{{ niceTime(appointment.time) }}</strong>
+                  <span>{{ niceDate(appointment.date) }}</span>
+                </div>
+                <div class="appointment-confirmation">
+                  <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status }}</span>
+                  <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">Confirm appointment</button>
                 </div>
               </article>
             </div>
@@ -153,6 +117,7 @@ function submitFeedback() {
         <!-- FULL UPCOMING APPOINTMENTS: separate scrollable list -->
         <section v-else-if="currentPage === 'appointments'" class="detail-screen appointments-page" aria-labelledby="all-appointments-heading">
           <h1 id="all-appointments-heading" class="section-heading">All Appointments</h1>
+          <p v-if="statusMessage" class="status-message" role="status">{{ statusMessage }}</p>
           <p class="screen-description">{{ sortedAppointments.length }} upcoming {{ sortedAppointments.length === 1 ? 'appointment' : 'appointments' }}</p>
           <div class="all-appointments-list" role="list" aria-label="All upcoming appointments">
             <article v-for="appointment in sortedAppointments" :key="appointment.id" class="appointment-card" role="listitem">
@@ -161,39 +126,41 @@ function submitFeedback() {
                 <strong>{{ appointment.doctor }}</strong>
               </div>
               <div class="appointment-right">
-                <strong>{{ appointment.time }}</strong>
-                <span>{{ appointment.date }}</span>
+                <strong>{{ niceTime(appointment.time) }}</strong>
+                <span>{{ niceDate(appointment.date) }}</span>
+              </div>
+              <div class="appointment-confirmation">
+                <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status }}</span>
+                <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">Confirm appointment</button>
               </div>
             </article>
           </div>
           <button type="button" class="all-appointments-back" @click="goBack">← Back to Home</button>
         </section>
 
-        <!-- DEMO BOOKING SCREEN -->
+        <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
           <h1 id="booking-heading" class="section-heading">Booking</h1>
-          <p class="screen-description">Create an example appointment. This prototype does not contact a clinic.</p>
+          <p class="screen-description">Choose a date and time to book an appointment.</p>
           <form class="form-stack" @submit.prevent="saveBooking">
             <label for="doctor">Doctor</label>
             <select id="doctor" v-model="booking.doctor" required>
-              <option>Dr. Smith</option>
-              <option>Dr. Lee</option>
-              <option>Dr. Patel</option>
+              <option v-for="person in staff" :key="person.name">{{ person.name }}</option>
             </select>
             <label for="date">Date</label>
             <input id="date" v-model="booking.date" type="date" :min="minDate" required />
             <label for="time">Time</label>
             <input id="time" v-model="booking.time" type="time" required />
             <p v-if="statusMessage" class="status-message" role="alert">{{ statusMessage }}</p>
-            <button class="primary-button" type="submit">Add demo appointment</button>
+            <button class="primary-button" type="submit">Book appointment</button>
           </form>
         </section>
 
-        <!-- DEMO FEEDBACK SCREEN -->
+        <!-- FEEDBACK SCREEN -->
         <section v-else-if="currentPage === 'feedback'" class="detail-screen" aria-labelledby="feedback-heading">
           <h1 id="feedback-heading" class="section-heading">Surveys / Feedback</h1>
-          <p class="screen-description">Tell us about your experience with the demonstration app.</p>
-          <p v-if="feedbackSent" class="status-message" role="status">Thank you! Your demo feedback was recorded on this screen only, not sent to a clinic.</p>
+          <p class="screen-description">Tell us about your experience.</p>
+          <p v-if="feedbackSent" class="status-message" role="status">Thank you for your feedback!</p>
           <form class="form-stack" @submit.prevent="submitFeedback">
             <label for="rating">Rating</label>
             <select id="rating" v-model="feedback.rating" required>
@@ -206,19 +173,19 @@ function submitFeedback() {
             </select>
             <label for="comments">Comments (optional)</label>
             <textarea id="comments" v-model="feedback.message" rows="5" placeholder="Share your feedback..."></textarea>
-            <button class="primary-button" type="submit">Submit demo feedback</button>
+            <button class="primary-button" type="submit">Submit feedback</button>
           </form>
         </section>
 
         <!-- PROFILE AND NOTIFICATIONS -->
         <section v-else-if="currentPage === 'profile'" class="detail-screen" aria-labelledby="profile-heading">
           <h1 id="profile-heading" class="section-heading">Profile</h1>
-          <div class="detail-card"><strong>Demo Patient</strong><p>Patient account</p><p>Profile settings will be connected later.</p></div>
+          <div class="detail-card"><strong>Jordan Taylor</strong><p>Patient account</p><p>Manage your appointments and account from ClinicFlow.</p></div>
         </section>
 
         <section v-else-if="currentPage === 'notifications'" class="detail-screen" aria-labelledby="notifications-heading">
           <h1 id="notifications-heading" class="section-heading">Notifications</h1>
-          <div class="detail-card"><strong>Upcoming appointment</strong><p v-if="sortedAppointments.length">{{ sortedAppointments[0].doctor }} · {{ sortedAppointments[0].date }} at {{ sortedAppointments[0].time }}</p><p>Reminder notifications are placeholders in this prototype.</p></div>
+          <div class="detail-card"><strong>Upcoming appointment</strong><p v-if="sortedAppointments.length">{{ sortedAppointments[0].doctor }} · {{ niceDate(sortedAppointments[0].date) }} at {{ niceTime(sortedAppointments[0].time) }}</p><p>Check your upcoming appointments and confirmation status.</p></div>
         </section>
 
         <!-- MENU -->
@@ -482,4 +449,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .bottom-spacer { min-height: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .action-card { transition: none; } }
+.appointment-card{flex-wrap:wrap}
+.appointment-confirmation{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding-top:9px;border-top:1px solid #e3e8ee;flex-wrap:wrap}
+.confirmation-badge{font-size:11px;color:#8a5b0d;font-weight:700}
+.confirmation-badge.confirmed{color:#14764b}
+.confirm-button{background:#2777b5;color:#fff;border:0;border-radius:7px;padding:8px 11px;font-size:12px;font-weight:700;cursor:pointer}
+.confirm-button:hover{background:#195e96}
 </style>

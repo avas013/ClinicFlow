@@ -39,7 +39,7 @@ function act(id, status) {
         <div><span>Cancellations</span><strong>{{ cancellations.length }}</strong></div>
       </div>
       <form v-if="showForm" class="front-form" @submit.prevent="submit">
-        <div class="front-card-title"><h2>Book an appointment / add walk-in</h2><span>Demo data only</span></div>
+        <div class="front-card-title"><h2>Book an appointment / add walk-in</h2><span></span></div>
         <div class="front-form-grid">
           <label>Patient name<input v-model="form.patient" required maxlength="80" placeholder="e.g. Morgan Chen" /></label>
           <label>Clinician<select v-model="form.doctor"><option v-for="s in staff" :key="s.name">{{ s.name }}</option></select></label>
@@ -57,8 +57,8 @@ function act(id, status) {
       <p v-if="notice" class="front-notice" role="status">{{ notice }}</p>
       <section v-if="tab === 'appointments'" class="front-card">
         <div class="front-card-title"><h2>Appointment management</h2><label class="front-search"><span class="sr-only">Search appointments</span><input v-model="search" placeholder="Search patient, clinician or status" /></label></div>
-        <div class="front-table-scroll"><table><thead><tr><th>Patient</th><th>Date & time</th><th>Clinician</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-          <tr v-for="a in matches" :key="a.id"><td><strong>{{ a.patient }}</strong><small>{{ a.reason }}</small></td><td>{{ niceDate(a.date) }}<small>{{ niceTime(a.time) }}</small></td><td>{{ a.doctor }}</td><td><span class="front-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td><td class="front-actions"><button v-if="a.status === 'Scheduled'" @click="act(a.id,'Checked in')">Check in</button><button v-if="['Scheduled','Checked in'].includes(a.status)" class="front-danger" @click="act(a.id,'Cancelled')">Cancel</button><button v-if="a.status === 'Scheduled'" @click="act(a.id,'No show')">No-show</button><button v-if="a.status === 'Cancelled'" @click="act(a.id,'Scheduled')">Restore</button><span v-if="['Completed','In progress','No show'].includes(a.status)">—</span></td></tr>
+        <div class="front-table-scroll"><table><thead><tr><th>Patient</th><th>Date & time</th><th>Clinician</th><th>Status</th><th>Confirmation</th><th>Actions</th></tr></thead><tbody>
+          <tr v-for="a in matches" :key="a.id"><td><strong>{{ a.patient }}</strong><small>{{ a.reason }}</small></td><td>{{ niceDate(a.date) }}<small>{{ niceTime(a.time) }}</small></td><td>{{ a.doctor }}</td><td><span class="front-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td><td><strong>{{ a.confirmed ? 'Confirmed' : a.status === 'Scheduled' ? 'Pending' : '—' }}</strong></td><td class="front-actions"><button v-if="a.status === 'Scheduled'" @click="act(a.id,'Checked in')">Check in</button><button v-if="['Scheduled','Checked in'].includes(a.status)" class="front-danger" @click="act(a.id,'Cancelled')">Cancel</button><button v-if="a.status === 'Scheduled'" @click="act(a.id,'No show')">No-show</button><button v-if="a.status === 'Cancelled'" @click="act(a.id,'Scheduled')">Restore</button><span v-if="['Completed','In progress','No show'].includes(a.status)">—</span></td></tr>
         </tbody></table></div>
         <p v-if="!matches.length" class="front-empty">No matching appointments.</p>
       </section>
@@ -67,7 +67,7 @@ function act(id, status) {
         <div v-for="(a, index) in waiting" :key="a.id" class="front-queue-row"><span class="front-position">{{ index+1 }}</span><div><strong>{{ a.patient }}</strong><p>{{ a.doctor }} · {{ niceTime(a.time) }}</p></div><button class="front-primary" @click="act(a.id,'In progress')">Call patient</button></div>
         <p v-if="!waiting.length" class="front-empty">No patients in the waiting list.</p>
       </section>
-      <p class="front-footer">Changes are shared with the Doctor/Nurse and Administrator demos until the page is refreshed. No real patient data.</p>
+      <p class="front-footer">Appointments and confirmations are shared across ClinicFlow.</p>
     </div>
   </div>
 </template>
