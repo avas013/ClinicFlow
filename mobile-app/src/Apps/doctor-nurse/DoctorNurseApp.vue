@@ -1,16 +1,17 @@
 <script setup>
 import { ref, computed, reactive } from 'vue'
-import { clinic, staff, day, ordered, niceDate, niceTime, update, book } from '../shared/demoStore.js'
+import { clinic, staff, day, ordered, update, book } from '../shared/demoStore.js'
+import { t, formatDate, formatTime, countLabel } from '../../language.js'
 
 const doctor = ref('Dr. Smith')
 const tab = ref('schedule')
-const message = ref('')
+const message = ref(null)
 const showBooking = ref(false)
 const newVisit = reactive({ patient: 'Jordan Taylor', date: day(1), time: '11:30', reason: 'Follow-up' })
 function createVisit() {
   if (!newVisit.patient.trim() || !newVisit.date || !newVisit.time) return
   book({ patient: newVisit.patient, doctor: doctor.value, date: newVisit.date, time: newVisit.time, reason: newVisit.reason })
-  message.value = `Appointment booked for ${newVisit.patient}. The patient can now confirm it.`
+  message.value = { text: 'Appointment booked for {patient}. The patient can now confirm it.', patient: newVisit.patient }
   showBooking.value = false
 }
 const mine = computed(() => ordered(clinic.appointments.filter(a => a.doctor === doctor.value)))
@@ -19,11 +20,11 @@ const history = computed(() => mine.value.filter(a => a.date < day() || ['Comple
 const patients = computed(() => [...new Set(mine.value.map(a => a.patient))].sort())
 function changeStatus(a, status) {
   update(a.id, status)
-  message.value = `${a.patient} — ${status}.`
+  message.value = { text: '{patient} — {status}.', patient: a.patient, status }
 }
 function rebook(a) {
   book({ patient: a.patient, doctor: a.doctor, date: day(7), time: a.time, reason: a.reason })
-  message.value = `Follow-up for ${a.patient} booked for ${niceDate(day(7))}. The patient can confirm it in their app.`
+  message.value = { text: 'Follow-up for {patient} booked for {date}. The patient can confirm it in their app.', patient: a.patient, date: day(7) }
 }
 </script>
 
@@ -31,54 +32,54 @@ function rebook(a) {
   <div class="staff-screen">
     <div class="staff-wrap">
       <div class="staff-heading">
-        <div><p class="staff-overline">CLINICAL WORKSPACE</p><h1>Good morning, care team</h1><p class="staff-muted">{{ niceDate(day()) }}</p></div>
-        <label class="staff-picker">View schedule for
+        <div><p class="staff-overline">{{ t('Clinical workspace') }}</p><h1>{{ t('Good morning, care team') }}</h1><p class="staff-muted">{{ formatDate(day()) }}</p></div>
+        <label class="staff-picker">{{ t('View schedule for') }}
           <select v-model="doctor"><option v-for="s in staff" :key="s.name">{{ s.name }}</option></select>
         </label>
       </div>
-      <button class="staff-primary" type="button" style="margin-top:18px;padding:12px 16px;border-radius:8px" @click="showBooking=!showBooking">{{ showBooking ? 'Close booking' : '+ Book patient appointment' }}</button>
+      <button class="staff-primary" type="button" style="margin-top:18px;padding:12px 16px;border-radius:8px" @click="showBooking=!showBooking">{{ showBooking ? t('Close booking') : '+ ' + t('Book patient appointment') }}</button>
       <form v-if="showBooking" class="staff-card clinic-booking" @submit.prevent="createVisit">
-        <h2>Book appointment for patient</h2>
-        <label>Patient name <input v-model="newVisit.patient" required /></label>
-        <label>Date <input v-model="newVisit.date" type="date" required /></label>
-        <label>Time <input v-model="newVisit.time" type="time" required /></label>
-        <label>Visit type <select v-model="newVisit.reason"><option>Consultation</option><option>Follow-up</option><option>Check-up</option></select></label>
-        <button class="staff-primary" type="submit">Save appointment</button>
+        <h2>{{ t('Book appointment for patient') }}</h2>
+        <label>{{ t('Patient name') }} <input v-model="newVisit.patient" required /></label>
+        <label>{{ t('Date') }} <input v-model="newVisit.date" type="date" required /></label>
+        <label>{{ t('Time') }} <input v-model="newVisit.time" type="time" required /></label>
+        <label>{{ t('Visit type') }} <select v-model="newVisit.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option></select></label>
+        <button class="staff-primary" type="submit">{{ t('Save appointment') }}</button>
       </form>
       <div class="staff-stats">
-        <div><span>Today's visits</span><strong>{{ today.length }}</strong><small>Assigned appointments</small></div>
-        <div><span>Checked in</span><strong>{{ today.filter(a => a.status === 'Checked in').length }}</strong><small>Ready for appointment</small></div>
-        <div><span>In progress</span><strong>{{ today.filter(a => a.status === 'In progress').length }}</strong><small>Currently being seen</small></div>
+        <div><span>{{ t("Today's visits") }}</span><strong>{{ today.length }}</strong><small>{{ t('Assigned appointments') }}</small></div>
+        <div><span>{{ t('Checked in') }}</span><strong>{{ today.filter(a => a.status === 'Checked in').length }}</strong><small>{{ t('Ready for appointment') }}</small></div>
+        <div><span>{{ t('In progress') }}</span><strong>{{ today.filter(a => a.status === 'In progress').length }}</strong><small>{{ t('Currently being seen') }}</small></div>
       </div>
-      <div class="staff-tabs" role="group" aria-label="Doctor app views">
-        <button v-for="t in [['schedule','Schedule'],['patients','Patients'],['history','History']]" :key="t[0]" :class="{ active: tab === t[0] }" @click="tab=t[0]; message=''">{{ t[1] }}</button>
+      <div class="staff-tabs" role="group" :aria-label="t('Doctor app views')">
+        <button v-for="item in [['schedule','Schedule'],['patients','Patients'],['history','History']]" :key="item[0]" :class="{ active: tab === item[0] }" @click="tab=item[0]; message=null">{{ t(item[1]) }}</button>
       </div>
-      <p v-if="message" class="staff-message" role="status">{{ message }}</p>
+      <p v-if="message" class="staff-message" role="status">{{ t(message.text, { patient: message.patient, date: message.date && formatDate(message.date), status: message.status && t(message.status) }) }}</p>
       <section v-if="tab === 'schedule'" class="staff-card">
-        <div class="staff-card-head"><h2>Today's schedule</h2><span>{{ today.length }} appointments</span></div>
+        <div class="staff-card-head"><h2>{{ t("Today's schedule") }}</h2><span>{{ countLabel(today.length, 'appointment', 'appointments') }}</span></div>
         <article v-for="a in today" :key="a.id" class="staff-visit">
-          <strong class="staff-time">{{ niceTime(a.time) }}</strong>
-          <div class="staff-detail"><div class="staff-visit-title"><strong>{{ a.patient }}</strong><span class="staff-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></div>
-            <p>{{ a.reason }} · {{ a.doctor }}</p>
+          <strong class="staff-time">{{ formatTime(a.time) }}</strong>
+          <div class="staff-detail"><div class="staff-visit-title"><strong>{{ a.patient }}</strong><span class="staff-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ t(a.status) }}</span></div>
+            <p>{{ t(a.reason) }} · {{ a.doctor }}</p>
             <div class="staff-actions">
-              <button v-if="a.status === 'Checked in'" class="staff-primary" @click="changeStatus(a,'In progress')">Start visit</button>
-              <button v-if="a.status === 'In progress'" class="staff-primary" @click="changeStatus(a,'Completed')">Complete visit</button>
-              <button v-if="a.status === 'Scheduled'" @click="changeStatus(a,'No show')">Mark no-show</button>
-              <button @click="rebook(a)">Book follow-up</button>
+              <button v-if="a.status === 'Checked in'" class="staff-primary" @click="changeStatus(a,'In progress')">{{ t('Start visit') }}</button>
+              <button v-if="a.status === 'In progress'" class="staff-primary" @click="changeStatus(a,'Completed')">{{ t('Complete visit') }}</button>
+              <button v-if="a.status === 'Scheduled'" @click="changeStatus(a,'No show')">{{ t('Mark no-show') }}</button>
+              <button @click="rebook(a)">{{ t('Book follow-up') }}</button>
             </div>
           </div>
         </article>
-        <p v-if="today.length === 0" class="staff-empty">No appointments for this staff member today.</p>
+        <p v-if="today.length === 0" class="staff-empty">{{ t('No appointments for this staff member today.') }}</p>
       </section>
       <section v-else-if="tab === 'patients'" class="staff-card">
-        <div class="staff-card-head"><h2>My patients</h2><span>{{ patients.length }} patients</span></div>
-        <div v-for="name in patients" :key="name" class="staff-patient"><span class="staff-avatar">{{ name.split(' ').map(s => s[0]).join('') }}</span><strong>{{ name }}</strong><small>{{ mine.filter(a => a.patient === name).length }} visit(s)</small></div>
-        <p v-if="!patients.length" class="staff-empty">No patients assigned.</p>
+        <div class="staff-card-head"><h2>{{ t('My patients') }}</h2><span>{{ countLabel(patients.length, 'patient', 'patients') }}</span></div>
+        <div v-for="name in patients" :key="name" class="staff-patient"><span class="staff-avatar">{{ name.split(' ').map(s => s[0]).join('') }}</span><strong>{{ name }}</strong><small>{{ countLabel(mine.filter(a => a.patient === name).length, 'visit', 'visits') }}</small></div>
+        <p v-if="!patients.length" class="staff-empty">{{ t('No patients assigned.') }}</p>
       </section>
       <section v-else class="staff-card">
-        <div class="staff-card-head"><h2>Visit history</h2><span>{{ history.length }} records</span></div>
-        <div v-for="a in history" :key="a.id" class="staff-history"><div><strong>{{ a.patient }}</strong><p>{{ niceDate(a.date) }} at {{ niceTime(a.time) }}</p></div><span class="staff-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span><button @click="rebook(a)">Rebook</button></div>
-        <p v-if="!history.length" class="staff-empty">No visit history yet.</p>
+        <div class="staff-card-head"><h2>{{ t('Visit history') }}</h2><span>{{ countLabel(history.length, 'record', 'records') }}</span></div>
+        <div v-for="a in history" :key="a.id" class="staff-history"><div><strong>{{ a.patient }}</strong><p>{{ t('{date} at {time}', { date: formatDate(a.date), time: formatTime(a.time) }) }}</p></div><span class="staff-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ t(a.status) }}</span><button @click="rebook(a)">{{ t('Rebook') }}</button></div>
+        <p v-if="!history.length" class="staff-empty">{{ t('No visit history yet.') }}</p>
       </section>
       
     </div>

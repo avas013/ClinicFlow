@@ -1,6 +1,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { language, t } from './language.js'
 import PatientApp from './Apps/patient/PatientApp.vue'
 import DoctorNurseApp from './Apps/doctor-nurse/DoctorNurseApp.vue'
 
@@ -62,10 +63,17 @@ function signOut() {
       <div class="login-card">
         <div class="logo">+</div>
         <h1>ClinicFlow</h1>
-        <p>Patient and Care Team</p>
+        <p>{{ t('Patient and Care Team') }}</p>
+        <label class="language-picker">
+          <span>{{ t('Language') }}</span>
+          <select v-model="language">
+            <option value="en" lang="en">English</option>
+            <option value="fr" lang="fr">Français</option>
+          </select>
+        </label>
 
         <form @submit.prevent="signIn">
-          <label for="email">Email</label>
+          <label for="email">{{ t('Email') }}</label>
           <input
             id="email"
             v-model="email"
@@ -74,7 +82,7 @@ function signOut() {
             required
           />
 
-          <label for="password">Password</label>
+          <label for="password">{{ t('Password') }}</label>
           <input
             id="password"
             v-model="password"
@@ -84,11 +92,11 @@ function signOut() {
           />
 
           <p v-if="error" class="error" role="alert">
-            {{ error }}
+            {{ t(error) }}
           </p>
 
           <button class="login-button" type="submit">
-            Sign in
+            {{ t('Sign in') }}
           </button>
         </form>
       </div>
@@ -97,8 +105,15 @@ function signOut() {
     <template v-else>
       <header class="app-header">
         <strong>ClinicFlow</strong>
+        <label class="language-picker">
+          <span>{{ t('Language') }}</span>
+          <select v-model="language">
+            <option value="en" lang="en">English</option>
+            <option value="fr" lang="fr">Français</option>
+          </select>
+        </label>
         <button type="button" @click="signOut">
-          Log out
+          {{ t('Log out') }}
         </button>
       </header>
 
@@ -218,5 +233,25 @@ input {
   border: 0;
   border-radius: 8px;
   padding: 9px 13px;
+}
+.language-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.language-picker select {
+  font: inherit;
+  color: inherit;
+  background: white;
+  border: 1px solid #cbd7e2;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.app-header {
+  flex-wrap: wrap;
+  gap: 10px;
 }
 </style>

@@ -1,15 +1,41 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
-import { clinic, book, confirmAppointment, niceDate, niceTime, staff, queue } from '../shared/demoStore.js'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { clinic, book, confirmAppointment, ordered, staff, queue } from '../shared/demoStore.js'
+import { language, t, formatDate, formatTime, countLabel } from '../../language.js'
 
 const patientName = 'Jordan Taylor'
 const queuePosition = computed(() => queue().findIndex(a => a.patient === patientName) + 1)
-const appointments = computed(() => clinic.appointments.filter(a =>
-  a.patient.toLowerCase() === patientName.toLowerCase() &&
-  !['Cancelled', 'Completed', 'No show'].includes(a.status)
-))
-const sortedAppointments = computed(() => [...appointments.value].sort((a,b) =>
-  `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)))
+const now = ref(new Date())
+const minDate = computed(() => now.value.toLocaleDateString('en-CA'))
+const closedStatuses = ['Completed', 'Cancelled', 'No show']
+const activeVisitStatuses = ['Checked in', 'In progress']
+const patientAppointments = computed(() => ordered(clinic.appointments.filter(appointment =>
+  appointment.patient.trim().toLowerCase() === patientName.toLowerCase()
+)))
+
+function isInHistory(appointment) {
+  if (closedStatuses.includes(appointment.status)) return true
+  const scheduledAt = new Date(`${appointment.date}T${appointment.time}`)
+  const isStillInClinic = activeVisitStatuses.includes(appointment.status) && appointment.date === minDate.value
+  return !isStillInClinic && scheduledAt <= now.value
+}
+
+const sortedAppointments = computed(() => patientAppointments.value.filter(appointment => !isInHistory(appointment)))
+const pastAppointments = computed(() => patientAppointments.value.filter(isInHistory).reverse())
+
+function refreshTime() {
+  now.value = new Date()
+}
+
+let clockTimer
+onMounted(() => {
+  clockTimer = window.setInterval(refreshTime, 30000)
+  window.addEventListener('focus', refreshTime)
+})
+onUnmounted(() => {
+  window.clearInterval(clockTimer)
+  window.removeEventListener('focus', refreshTime)
+})
 const hasMoreAppointments = computed(() => sortedAppointments.value.length > 3)
 const homeAppointments = computed(() => hasMoreAppointments.value
   ? sortedAppointments.value.slice(0, 2) : sortedAppointments.value)
@@ -19,20 +45,25 @@ const statusMessage = ref('')
 const feedbackSent = ref(false)
 const booking = reactive({ doctor: 'Dr. Smith', date: '', time: '' })
 const feedback = reactive({ rating: '', message: '' })
-const minDate = new Date().toLocaleDateString('en-CA')
 const queueLabel = computed(() => {
   const n = queuePosition.value
-  if (n < 1) return 'Not currently in line'
+  if (n < 1) return t('Not currently in line')
+  if (language.value === 'fr') return t('Position {position} in line', { position: n })
   const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'
   return `${n}${suffix} in line`
 })
 function openPage(page) {
+  refreshTime()
   if (currentPage.value === page) return
   pageHistory.value.push(currentPage.value)
   currentPage.value = page
   statusMessage.value = ''
 }
-function goHome() { currentPage.value = 'home'; pageHistory.value = [] }
+function goHome() {
+  refreshTime()
+  currentPage.value = 'home'
+  pageHistory.value = []
+}
 function goBack() {
   if (pageHistory.value.length) currentPage.value = pageHistory.value.pop()
   else statusMessage.value = 'You are already on the home screen.'
@@ -58,11 +89,11 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
   <div class="viewport">
     <div class="phone-app">
       <header class="top-bar">
-        <button class="icon-button" type="button" aria-label="Open patient profile" @click="openPage('profile')">
+        <button class="icon-button" type="button" :aria-label="t('Open patient profile')" @click="openPage('profile')">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3.5" /><path d="M4.5 20v-2a7.5 7.5 0 0 1 15 0v2" /></svg>
         </button>
         <span class="brand">ClinicFlow</span>
-        <button class="icon-button" type="button" aria-label="View notifications" @click="openPage('notifications')">
+        <button class="icon-button" type="button" :aria-label="t('View notifications')" @click="openPage('notifications')">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" /><path d="M10 21h4" /></svg>
         </button>
       </header>
@@ -71,44 +102,44 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
         <!-- HOME: follows the layout of the supplied drawing -->
         <div v-if="currentPage === 'home'" class="home-content">
           <section aria-labelledby="upcoming-heading">
-            <h1 id="upcoming-heading" class="section-heading">Upcoming</h1>
+            <h1 id="upcoming-heading" class="section-heading">{{ t('Upcoming') }}</h1>
             <div class="appointments-list">
               <article v-for="appointment in homeAppointments" :key="appointment.id" class="appointment-card">
                 <div class="appointment-left">
-                  <span class="card-label">Appointment</span>
+                  <span class="card-label">{{ t('Appointment') }}</span>
                   <strong>{{ appointment.doctor }}</strong>
                 </div>
                 <div class="appointment-right">
-                  <strong>{{ niceTime(appointment.time) }}</strong>
-                  <span>{{ niceDate(appointment.date) }}</span>
+                  <strong>{{ formatTime(appointment.time) }}</strong>
+                  <span>{{ formatDate(appointment.date) }}</span>
                 </div>
                 <div class="appointment-confirmation">
-                  <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status }}</span>
-                  <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">Confirm appointment</button>
+                  <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ t(appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status) }}</span>
+                  <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">{{ t('Confirm appointment') }}</button>
                 </div>
               </article>
             </div>
-            <p v-if="appointments.length === 0" class="empty-state">No upcoming appointments.</p>
+            <p v-if="sortedAppointments.length === 0" class="empty-state">{{ t('No upcoming appointments.') }}</p>
             <button
               v-if="hasMoreAppointments"
               type="button"
               class="view-more-button"
               @click="openPage('appointments')"
             >
-              View More <span aria-hidden="true">→</span>
+              {{ t('View More') }} <span aria-hidden="true">→</span>
             </button>
           </section>
 
-          <p v-if="statusMessage" class="status-message" role="status">{{ statusMessage }}</p>
+          <p v-if="statusMessage" class="status-message" role="status">{{ t(statusMessage) }}</p>
           <div class="flex-spacer"></div>
 
-          <section class="quick-actions" aria-label="Patient actions">
-            <button type="button" class="action-card" @click="openPage('booking')">Booking</button>
-            <button type="button" class="action-card" @click="openPage('feedback')">Surveys /<br />Feedback</button>
+          <section class="quick-actions" :aria-label="t('Patient actions')">
+            <button type="button" class="action-card" @click="openPage('booking')">{{ t('Booking') }}</button>
+            <button type="button" class="action-card" @click="openPage('feedback')">{{ t('Surveys / Feedback') }}</button>
           </section>
 
           <section class="queue-section" aria-labelledby="queue-heading">
-            <h2 id="queue-heading" class="section-heading">Queue</h2>
+            <h2 id="queue-heading" class="section-heading">{{ t('Queue') }}</h2>
             <p class="queue-position"><span class="queue-dot" aria-hidden="true"></span>{{ queueLabel }}</p>
           </section>
           <div class="bottom-spacer"></div>
@@ -116,100 +147,133 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
 
         <!-- FULL UPCOMING APPOINTMENTS: separate scrollable list -->
         <section v-else-if="currentPage === 'appointments'" class="detail-screen appointments-page" aria-labelledby="all-appointments-heading">
-          <h1 id="all-appointments-heading" class="section-heading">All Appointments</h1>
-          <p v-if="statusMessage" class="status-message" role="status">{{ statusMessage }}</p>
-          <p class="screen-description">{{ sortedAppointments.length }} upcoming {{ sortedAppointments.length === 1 ? 'appointment' : 'appointments' }}</p>
-          <div class="all-appointments-list" role="list" aria-label="All upcoming appointments">
+          <h1 id="all-appointments-heading" class="section-heading">{{ t('All Appointments') }}</h1>
+          <p v-if="statusMessage" class="status-message" role="status">{{ t(statusMessage) }}</p>
+          <p class="screen-description">{{ countLabel(sortedAppointments.length, 'upcoming appointment', 'upcoming appointments') }}</p>
+          <div class="all-appointments-list" role="list" :aria-label="t('All upcoming appointments')">
             <article v-for="appointment in sortedAppointments" :key="appointment.id" class="appointment-card" role="listitem">
               <div class="appointment-left">
-                <span class="card-label">Appointment</span>
+                <span class="card-label">{{ t('Appointment') }}</span>
                 <strong>{{ appointment.doctor }}</strong>
               </div>
               <div class="appointment-right">
-                <strong>{{ niceTime(appointment.time) }}</strong>
-                <span>{{ niceDate(appointment.date) }}</span>
+                <strong>{{ formatTime(appointment.time) }}</strong>
+                <span>{{ formatDate(appointment.date) }}</span>
               </div>
               <div class="appointment-confirmation">
-                <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status }}</span>
-                <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">Confirm appointment</button>
+                <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ t(appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status) }}</span>
+                <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">{{ t('Confirm appointment') }}</button>
               </div>
             </article>
           </div>
-          <button type="button" class="all-appointments-back" @click="goBack">← Back to Home</button>
+          <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Home') }}</button>
         </section>
 
         <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
-          <h1 id="booking-heading" class="section-heading">Booking</h1>
-          <p class="screen-description">Choose a date and time to book an appointment.</p>
+          <h1 id="booking-heading" class="section-heading">{{ t('Booking') }}</h1>
+          <p class="screen-description">{{ t('Choose a date and time to book an appointment.') }}</p>
           <form class="form-stack" @submit.prevent="saveBooking">
-            <label for="doctor">Doctor</label>
+            <label for="doctor">{{ t('Doctor') }}</label>
             <select id="doctor" v-model="booking.doctor" required>
               <option v-for="person in staff" :key="person.name">{{ person.name }}</option>
             </select>
-            <label for="date">Date</label>
+            <label for="date">{{ t('Date') }}</label>
             <input id="date" v-model="booking.date" type="date" :min="minDate" required />
-            <label for="time">Time</label>
+            <label for="time">{{ t('Time') }}</label>
             <input id="time" v-model="booking.time" type="time" required />
-            <p v-if="statusMessage" class="status-message" role="alert">{{ statusMessage }}</p>
-            <button class="primary-button" type="submit">Book appointment</button>
+            <p v-if="statusMessage" class="status-message" role="alert">{{ t(statusMessage) }}</p>
+            <button class="primary-button" type="submit">{{ t('Book appointment') }}</button>
           </form>
         </section>
 
         <!-- FEEDBACK SCREEN -->
         <section v-else-if="currentPage === 'feedback'" class="detail-screen" aria-labelledby="feedback-heading">
-          <h1 id="feedback-heading" class="section-heading">Surveys / Feedback</h1>
-          <p class="screen-description">Tell us about your experience.</p>
-          <p v-if="feedbackSent" class="status-message" role="status">Thank you for your feedback!</p>
+          <h1 id="feedback-heading" class="section-heading">{{ t('Surveys / Feedback') }}</h1>
+          <p class="screen-description">{{ t('Tell us about your experience.') }}</p>
+          <p v-if="feedbackSent" class="status-message" role="status">{{ t('Thank you for your feedback!') }}</p>
           <form class="form-stack" @submit.prevent="submitFeedback">
-            <label for="rating">Rating</label>
+            <label for="rating">{{ t('Rating') }}</label>
             <select id="rating" v-model="feedback.rating" required>
-              <option disabled value="">Select a rating</option>
-              <option value="5">5 — Excellent</option>
-              <option value="4">4 — Good</option>
-              <option value="3">3 — Average</option>
-              <option value="2">2 — Poor</option>
-              <option value="1">1 — Very poor</option>
+              <option disabled value="">{{ t('Select a rating') }}</option>
+              <option value="5">5 — {{ t('Excellent') }}</option>
+              <option value="4">4 — {{ t('Good') }}</option>
+              <option value="3">3 — {{ t('Average') }}</option>
+              <option value="2">2 — {{ t('Poor') }}</option>
+              <option value="1">1 — {{ t('Very poor') }}</option>
             </select>
-            <label for="comments">Comments (optional)</label>
-            <textarea id="comments" v-model="feedback.message" rows="5" placeholder="Share your feedback..."></textarea>
-            <button class="primary-button" type="submit">Submit feedback</button>
+            <label for="comments">{{ t('Comments (optional)') }}</label>
+            <textarea id="comments" v-model="feedback.message" rows="5" :placeholder="t('Share your feedback...')"></textarea>
+            <button class="primary-button" type="submit">{{ t('Submit feedback') }}</button>
           </form>
         </section>
 
         <!-- PROFILE AND NOTIFICATIONS -->
         <section v-else-if="currentPage === 'profile'" class="detail-screen" aria-labelledby="profile-heading">
-          <h1 id="profile-heading" class="section-heading">Profile</h1>
-          <div class="detail-card"><strong>Jordan Taylor</strong><p>Patient account</p><p>Manage your appointments and account from ClinicFlow.</p></div>
+          <h1 id="profile-heading" class="section-heading">{{ t('Profile') }}</h1>
+          <div class="detail-card"><strong>Jordan Taylor</strong><p>{{ t('Patient account') }}</p><p>{{ t('Manage your appointments and account from ClinicFlow.') }}</p></div>
         </section>
 
         <section v-else-if="currentPage === 'notifications'" class="detail-screen" aria-labelledby="notifications-heading">
-          <h1 id="notifications-heading" class="section-heading">Notifications</h1>
-          <div class="detail-card"><strong>Upcoming appointment</strong><p v-if="sortedAppointments.length">{{ sortedAppointments[0].doctor }} · {{ niceDate(sortedAppointments[0].date) }} at {{ niceTime(sortedAppointments[0].time) }}</p><p>Check your upcoming appointments and confirmation status.</p></div>
+          <h1 id="notifications-heading" class="section-heading">{{ t('Notifications') }}</h1>
+          <div class="detail-card"><strong>{{ t('Upcoming appointment') }}</strong><p v-if="sortedAppointments.length">{{ sortedAppointments[0].doctor }} · {{ t('{date} at {time}', { date: formatDate(sortedAppointments[0].date), time: formatTime(sortedAppointments[0].time) }) }}</p><p>{{ t('Check your upcoming appointments and confirmation status.') }}</p></div>
+        </section>
+
+        <section v-else-if="currentPage === 'settings'" class="detail-screen" aria-labelledby="settings-heading">
+          <h1 id="settings-heading" class="section-heading">{{ t('Settings') }}</h1>
+          <div class="form-stack">
+            <label for="settings-language">{{ t('Language') }}</label>
+            <select id="settings-language" v-model="language">
+              <option value="en" lang="en">English</option>
+              <option value="fr" lang="fr">Français</option>
+            </select>
+          </div>
+          <div class="menu-actions history-action">
+            <button type="button" @click="openPage('history')">{{ t('Past appointments') }} <span aria-hidden="true">›</span></button>
+          </div>
+        </section>
+
+        <section v-else-if="currentPage === 'history'" class="detail-screen" aria-labelledby="history-heading">
+          <h1 id="history-heading" class="section-heading">{{ t('Past appointments') }}</h1>
+          <div v-if="pastAppointments.length" class="all-appointments-list">
+            <article v-for="appointment in pastAppointments" :key="appointment.id" class="appointment-card">
+              <div class="appointment-left">
+                <strong>{{ t(appointment.status === 'Completed' ? 'Seen by {clinician}' : 'Assigned to {clinician}', { clinician: appointment.doctor }) }}</strong>
+                <span>{{ t(appointment.status) }}</span>
+              </div>
+              <div class="appointment-right">
+                <span>{{ formatDate(appointment.date) }}</span>
+                <span>{{ formatTime(appointment.time) }}</span>
+              </div>
+            </article>
+          </div>
+          <p v-else class="empty-state">{{ t('No past appointments.') }}</p>
+          <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Settings') }}</button>
         </section>
 
         <!-- MENU -->
         <section v-else-if="currentPage === 'menu'" class="detail-screen" aria-labelledby="menu-heading">
-          <h1 id="menu-heading" class="section-heading">Menu</h1>
+          <h1 id="menu-heading" class="section-heading">{{ t('Menu') }}</h1>
           <div class="menu-actions">
-            <button type="button" @click="goHome">Home <span aria-hidden="true">›</span></button>
-            <button type="button" @click="openPage('appointments')">All Appointments <span aria-hidden="true">›</span></button>
-            <button type="button" @click="openPage('booking')">Booking <span aria-hidden="true">›</span></button>
-            <button type="button" @click="openPage('feedback')">Surveys / Feedback <span aria-hidden="true">›</span></button>
-            <button type="button" @click="openPage('profile')">Profile <span aria-hidden="true">›</span></button>
-            <button type="button" @click="openPage('notifications')">Notifications <span aria-hidden="true">›</span></button>
+            <button type="button" @click="goHome">{{ t('Home') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('appointments')">{{ t('All Appointments') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('booking')">{{ t('Booking') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('feedback')">{{ t('Surveys / Feedback') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('profile')">{{ t('Profile') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('settings')">{{ t('Settings') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('notifications')">{{ t('Notifications') }} <span aria-hidden="true">›</span></button>
           </div>
         </section>
       </main>
 
-      <nav class="bottom-nav" aria-label="Bottom navigation">
-        <button class="nav-button" type="button" aria-label="Back" @click="goBack">
+      <nav class="bottom-nav" :aria-label="t('Bottom navigation')">
+        <button class="nav-button" type="button" :aria-label="t('Back')" @click="goBack">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg>
         </button>
-        <button class="nav-button" :class="{ 'nav-active': currentPage === 'home' }" type="button" aria-label="Home" :aria-current="currentPage === 'home' ? 'page' : undefined" @click="goHome">
+        <button class="nav-button" :class="{ 'nav-active': currentPage === 'home' }" type="button" :aria-label="t('Home')" :aria-current="currentPage === 'home' ? 'page' : undefined" @click="goHome">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v11H3V10Z" /><path d="M9 21v-7h6v7" /></svg>
         </button>
-        <button class="nav-button" :class="{ 'nav-active': currentPage === 'menu' }" type="button" aria-label="Menu" :aria-current="currentPage === 'menu' ? 'page' : undefined" @click="openPage('menu')">
+        <button class="nav-button" :class="{ 'nav-active': currentPage === 'menu' }" type="button" :aria-label="t('Menu')" :aria-current="currentPage === 'menu' ? 'page' : undefined" @click="openPage('menu')">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
       </nav>
@@ -455,4 +519,5 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .confirmation-badge.confirmed{color:#14764b}
 .confirm-button{background:#2777b5;color:#fff;border:0;border-radius:7px;padding:8px 11px;font-size:12px;font-weight:700;cursor:pointer}
 .confirm-button:hover{background:#195e96}
+.history-action { margin-top: 18px; }
 </style>
