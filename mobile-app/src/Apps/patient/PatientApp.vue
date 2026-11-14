@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { clinic, book, confirmAppointment, ordered, staff, queue } from '../shared/demoStore.js'
+import { clinic, book, confirmAppointment, day, ordered, staff, queue } from '../shared/demoStore.js'
 import { language, t, formatDate, formatTime, countLabel } from '../../language.js'
+import PatientCalendar from './PatientCalendar.vue'
 
 const patientName = 'Jordan Taylor'
 const queuePosition = computed(() => queue().findIndex(a => a.patient === patientName) + 1)
@@ -43,8 +44,44 @@ const currentPage = ref('home')
 const pageHistory = ref([])
 const statusMessage = ref('')
 const feedbackSent = ref(false)
-const booking = reactive({ doctor: 'Dr. Smith', date: '', time: '' })
+const booking = reactive({ doctor: 'Dr. Smith', date: day(), time: '' })
 const feedback = reactive({ rating: '', message: '' })
+const appointmentDay = ref(day())
+const dailyAppointments = computed(() => sortedAppointments.value.filter(a => a.date === appointmentDay.value))
+const availableTimes = computed(() => slotsFor(booking.date))
+
+function minutes(value) {
+  const [time, period] = value.trim().split(' ')
+  const [hour, minute] = time.split(':').map(Number)
+  return (hour % 12 + (period === 'PM' ? 12 : 0)) * 60 + minute
+}
+
+function slotsFor(date) {
+  const provider = staff.find(person => person.name === booking.doctor)
+  if (!provider || date < day()) return []
+  const [start, end] = provider.shift.split('–').map(minutes)
+  const now = Date.now()
+  const active = clinic.appointments.filter(a =>
+    a.date === date && (a.doctor === booking.doctor || a.patient.toLowerCase() === patientName.toLowerCase()) &&
+    !['Cancelled', 'No show'].includes(a.status)
+  )
+  const slots = []
+  for (let startMinute = start; startMinute + 30 <= end; startMinute += 30) {
+    const time = `${String(Math.floor(startMinute / 60)).padStart(2, '0')}:${String(startMinute % 60).padStart(2, '0')}`
+    const overlaps = active.some(a => {
+      const [hour, minute] = a.time.split(':').map(Number)
+      return Math.abs(startMinute - (hour * 60 + minute)) < 30
+    })
+    if (new Date(`${date}T${time}:00`).getTime() > now && !overlaps) slots.push(time)
+  }
+  return slots
+}
+
+function selectBookingDate(date) {
+  booking.date = date
+  booking.time = ''
+  statusMessage.value = ''
+}
 const queueLabel = computed(() => {
   const n = queuePosition.value
   if (n < 1) return t('Not currently in line')
@@ -69,13 +106,13 @@ function goBack() {
   else statusMessage.value = 'You are already on the home screen.'
 }
 function saveBooking() {
-  const dt = new Date(`${booking.date}T${booking.time}:00`)
-  if (Number.isNaN(dt.getTime()) || dt <= new Date()) {
-    statusMessage.value = 'Choose an appointment date and time in the future.'
+  if (!slotsFor(booking.date).includes(booking.time)) {
+    booking.time = ''
+    statusMessage.value = 'That time is no longer available. Choose another time.'
     return
   }
   book({ patient: patientName, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
-  booking.date = ''; booking.time = ''
+  booking.time = ''
   goHome()
   statusMessage.value = 'Appointment booked. Please confirm your attendance.'
 }
@@ -120,6 +157,7 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
               </article>
             </div>
             <p v-if="sortedAppointments.length === 0" class="empty-state">{{ t('No upcoming appointments.') }}</p>
+            <button type="button" class="view-more-button" @click="openPage('calendar')">Appointment calendar</button>
             <button
               v-if="hasMoreAppointments"
               type="button"
@@ -169,21 +207,36 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
           <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Home') }}</button>
         </section>
 
+        <section v-else-if="currentPage === 'calendar'" class="detail-screen" aria-labelledby="calendar-heading">
+          <h1 id="calendar-heading" class="section-heading">Appointment calendar</h1>
+          <PatientCalendar :selected="appointmentDay" :appointments="sortedAppointments" @select="appointmentDay = $event" />
+          <h2 class="section-heading">{{ formatDate(appointmentDay) }}</h2>
+          <p v-if="!dailyAppointments.length" class="empty-state">No upcoming appointments on this date.</p>
+          <div v-for="appointment in dailyAppointments" :key="appointment.id" class="detail-card">
+            <strong>{{ formatTime(appointment.time) }} · {{ appointment.doctor }}</strong>
+            <p>{{ appointment.reason }} · {{ appointment.confirmed ? 'Confirmed' : appointment.status }}</p>
+          </div>
+          <button type="button" class="primary-button" @click="selectBookingDate(appointmentDay); openPage('booking')">View booking availability</button>
+        </section>
+
         <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
           <h1 id="booking-heading" class="section-heading">{{ t('Booking') }}</h1>
           <p class="screen-description">{{ t('Choose a date and time to book an appointment.') }}</p>
           <form class="form-stack" @submit.prevent="saveBooking">
             <label for="doctor">{{ t('Doctor') }}</label>
-            <select id="doctor" v-model="booking.doctor" required>
+            <select id="doctor" v-model="booking.doctor" @change="selectBookingDate(booking.date)" required>
               <option v-for="person in staff" :key="person.name">{{ person.name }}</option>
             </select>
-            <label for="date">{{ t('Date') }}</label>
-            <input id="date" v-model="booking.date" type="date" :min="minDate" required />
+            <PatientCalendar :selected="booking.date" :appointments="sortedAppointments" :available="slotsFor" @select="selectBookingDate" />
+            <p>{{ formatDate(booking.date) }}</p>
             <label for="time">{{ t('Time') }}</label>
-            <input id="time" v-model="booking.time" type="time" required />
+            <select id="time" v-model="booking.time" :disabled="!availableTimes.length" required>
+              <option value="" disabled>{{ availableTimes.length ? 'Choose a time' : 'No times available' }}</option>
+              <option v-for="time in availableTimes" :key="time" :value="time">{{ formatTime(time) }}</option>
+            </select>
             <p v-if="statusMessage" class="status-message" role="alert">{{ t(statusMessage) }}</p>
-            <button class="primary-button" type="submit">{{ t('Book appointment') }}</button>
+            <button class="primary-button" type="submit" :disabled="!booking.time">{{ t('Book appointment') }}</button>
           </form>
         </section>
 
