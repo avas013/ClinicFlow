@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue'
 import {
-  clinic, staff, day, niceDate, niceTime,
+  clinic, staff, day,
   ordered, queue, moveQueue
 } from '../shared/demoStore.js'
+import { t, formatDate, formatTime, formatShift, countLabel } from '../../language.js'
 
 const tab = ref('overview')
 const period = ref('all')
@@ -44,80 +45,80 @@ function downloadReport() {
     <div class="admin-wrap">
       <div class="admin-heading">
         <div>
-          <p class="admin-overline">ADMINISTRATOR PORTAL</p>
-          <h1>Clinic overview</h1>
-          <p class="admin-muted">Operational insights</p>
+          <p class="admin-overline">{{ t('Administrator Portal') }}</p>
+          <h1>{{ t('Clinic overview') }}</h1>
+          <p class="admin-muted">{{ t('Operational insights') }}</p>
         </div>
         <div class="admin-controls">
-          <label>Reporting period
+          <label>{{ t('Reporting period') }}
             <select v-model="period">
-              <option value="all">All dates</option>
-              <option value="today">Today only</option>
+              <option value="all">{{ t('All dates') }}</option>
+              <option value="today">{{ t('Today only') }}</option>
             </select>
           </label>
-          <button class="admin-export" type="button" @click="downloadReport">Export CSV ↗</button>
+          <button class="admin-export" type="button" @click="downloadReport">{{ t('Export CSV') }} ↗</button>
         </div>
       </div>
 
       <div class="admin-stats">
-        <article><span>Total appointments</span><strong>{{ total }}</strong><small>Selected reporting period</small></article>
-        <article><span>Checked in</span><strong>{{ checked }}</strong><small>Waiting to be seen</small></article>
-        <article><span>Completed</span><strong>{{ completed }}</strong><small>Finished visits</small></article>
-        <article><span>Cancellation rate</span><strong>{{ rate }}%</strong><small>{{ cancelled }} cancellations</small></article>
+        <article><span>{{ t('Total appointments') }}</span><strong>{{ total }}</strong><small>{{ t('Selected reporting period') }}</small></article>
+        <article><span>{{ t('Checked in') }}</span><strong>{{ checked }}</strong><small>{{ t('Waiting to be seen') }}</small></article>
+        <article><span>{{ t('Completed') }}</span><strong>{{ completed }}</strong><small>{{ t('Finished visits') }}</small></article>
+        <article><span>{{ t('Cancellation rate') }}</span><strong>{{ rate }}%</strong><small>{{ countLabel(cancelled, 'cancellation', 'cancellations') }}</small></article>
       </div>
 
-      <nav class="admin-tabs" aria-label="Administrator dashboard views">
+      <nav class="admin-tabs" :aria-label="t('Administrator dashboard views')">
         <button
-          v-for="t in [
+          v-for="item in [
             ['overview', 'Overview'],
             ['staff', 'Staff schedule'],
             ['queue', 'Waiting list'],
             ['reports', 'Reports']
           ]"
-          :key="t[0]"
+          :key="item[0]"
           type="button"
-          :class="{ active: tab === t[0] }"
-          @click="tab = t[0]"
-        >{{ t[1] }}</button>
+          :class="{ active: tab === item[0] }"
+          @click="tab = item[0]"
+        >{{ t(item[1]) }}</button>
       </nav>
 
       <div v-if="tab === 'overview'" class="admin-grid">
         <section class="admin-panel">
           <div class="admin-panel-head">
-            <div><h2>Appointments by clinician</h2><p>Distribution across your staff</p></div>
+            <div><h2>{{ t('Appointments by clinician') }}</h2><p>{{ t('Distribution across your staff') }}</p></div>
           </div>
           <div v-for="person in perDoctor" :key="person.name" class="admin-bar-row">
-            <div><strong>{{ person.name }}</strong><span>{{ person.count }} visits</span></div>
+            <div><strong>{{ person.name }}</strong><span>{{ countLabel(person.count, 'visit', 'visits') }}</span></div>
             <div class="admin-track"><span :style="{ width: (person.count/maxCount*100) + '%' }"></span></div>
           </div>
         </section>
         <section class="admin-panel">
           <div class="admin-panel-head">
-            <div><h2>Appointment status</h2><p>Live appointment summary</p></div>
+            <div><h2>{{ t('Appointment status') }}</h2><p>{{ t('Live appointment summary') }}</p></div>
           </div>
           <div
             v-for="status in ['Scheduled', 'Checked in', 'In progress', 'Completed', 'Cancelled', 'No show']"
             :key="status"
             class="admin-status-row"
           >
-            <span>{{ status }}</span><strong>{{ rows.filter(a => a.status === status).length }}</strong>
+            <span>{{ t(status) }}</span><strong>{{ rows.filter(a => a.status === status).length }}</strong>
           </div>
         </section>
       </div>
 
       <section v-else-if="tab === 'staff'" class="admin-panel">
         <div class="admin-panel-head">
-          <div><h2>Staff schedule</h2><p>Assignments for {{ niceDate(day()) }}</p></div>
+          <div><h2>{{ t('Staff schedule') }}</h2><p>{{ t('Assignments for {date}', { date: formatDate(day()) }) }}</p></div>
         </div>
         <div class="admin-table-wrap">
           <table>
-            <thead><tr><th>Staff member</th><th>Role</th><th>Hours</th><th>Room</th><th>Appointments</th></tr></thead>
+            <thead><tr><th>{{ t('Staff member') }}</th><th>{{ t('Role') }}</th><th>{{ t('Hours') }}</th><th>{{ t('Room') }}</th><th>{{ t('Appointments') }}</th></tr></thead>
             <tbody>
               <tr v-for="person in perDoctor" :key="person.name">
                 <td><strong>{{ person.name }}</strong></td>
-                <td>{{ person.role }}</td>
-                <td>{{ person.shift }}</td>
-                <td>{{ person.room }}</td>
+                <td>{{ t(person.role) }}</td>
+                <td>{{ formatShift(person.shift) }}</td>
+                <td>{{ t('Room {number}', { number: person.room.split(' ').at(-1) }) }}</td>
                 <td>{{ person.count }}</td>
               </tr>
             </tbody>
@@ -128,49 +129,49 @@ function downloadReport() {
       <section v-else-if="tab === 'queue'" class="admin-panel">
         <div class="admin-panel-head">
           <div>
-            <h2>Patient waiting list</h2>
-            <p>Change the order in which checked-in patients are called.</p>
+            <h2>{{ t('Patient waiting list') }}</h2>
+            <p>{{ t('Change the order in which checked-in patients are called.') }}</p>
           </div>
-          <span class="admin-queue-count">{{ waiting.length }} waiting</span>
+          <span class="admin-queue-count">{{ t('{count} waiting', { count: waiting.length }) }}</span>
         </div>
         <div v-for="(a, index) in waiting" :key="a.id" class="admin-queue-row">
           <span class="admin-queue-position">{{ index + 1 }}</span>
           <div class="admin-queue-info">
             <strong>{{ a.patient }}</strong>
-            <p>{{ a.doctor }} · {{ niceTime(a.time) }}</p>
+            <p>{{ a.doctor }} · {{ formatTime(a.time) }}</p>
           </div>
           <div class="admin-queue-actions">
-            <button type="button" :disabled="index === 0" :aria-label="`Move ${a.patient} up`" @click="moveQueue(a.id, -1)">↑</button>
-            <button type="button" :disabled="index === waiting.length - 1" :aria-label="`Move ${a.patient} down`" @click="moveQueue(a.id, 1)">↓</button>
+            <button type="button" :disabled="index === 0" :aria-label="t('Move {patient} up', { patient: a.patient })" @click="moveQueue(a.id, -1)">↑</button>
+            <button type="button" :disabled="index === waiting.length - 1" :aria-label="t('Move {patient} down', { patient: a.patient })" @click="moveQueue(a.id, 1)">↓</button>
           </div>
         </div>
-        <p v-if="!waiting.length" class="admin-muted">No patients currently waiting.</p>
+        <p v-if="!waiting.length" class="admin-muted">{{ t('No patients currently waiting.') }}</p>
       </section>
 
       <section v-else class="admin-panel">
         <div class="admin-panel-head">
           <div>
-            <h2>Appointment report</h2>
-            <p>Changes made in Front Desk and Doctor/Nurse appear here.</p>
+            <h2>{{ t('Appointment report') }}</h2>
+            <p>{{ t('Changes made in Front Desk and Doctor/Nurse appear here.') }}</p>
           </div>
-          <button class="admin-export" type="button" @click="downloadReport">Download CSV</button>
+          <button class="admin-export" type="button" @click="downloadReport">{{ t('Download CSV') }}</button>
         </div>
         <div class="admin-table-wrap">
           <table>
-            <thead><tr><th>Patient</th><th>Date</th><th>Clinician</th><th>Type</th><th>Status</th><th>Confirmed</th></tr></thead>
+            <thead><tr><th>{{ t('Patient') }}</th><th>{{ t('Date') }}</th><th>{{ t('Clinician') }}</th><th>{{ t('Type') }}</th><th>{{ t('Status') }}</th><th>{{ t('Confirmed') }}</th></tr></thead>
             <tbody>
               <tr v-for="a in ordered(rows)" :key="a.id">
                 <td>{{ a.patient }}</td>
-                <td>{{ niceDate(a.date) }} · {{ niceTime(a.time) }}</td>
+                <td>{{ formatDate(a.date) }} · {{ formatTime(a.time) }}</td>
                 <td>{{ a.doctor }}</td>
-                <td>{{ a.reason }}</td>
-                <td><span class="admin-chip" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td>
-                <td>{{ a.confirmed ? 'Yes' : 'No' }}</td>
+                <td>{{ t(a.reason) }}</td>
+                <td><span class="admin-chip" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ t(a.status) }}</span></td>
+                <td>{{ t(a.confirmed ? 'Yes' : 'No') }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p v-if="!rows.length" class="admin-muted">No records in this period.</p>
+        <p v-if="!rows.length" class="admin-muted">{{ t('No records in this period.') }}</p>
       </section>
       <p class="admin-footer"></p>
     </div>

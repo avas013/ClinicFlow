@@ -1,6 +1,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { language, t } from './language.js'
 import FrontDeskApp from './Apps/front-desk/FrontDeskApp.vue'
 import AdministratorApp from './Apps/administrator/AdministratorApp.vue'
 
@@ -54,10 +55,17 @@ function signOut() {
       <section class="login-card">
         <div class="logo">+</div>
         <h1>ClinicFlow</h1>
-        <p>Staff Portal</p>
+        <p>{{ t('Staff Portal') }}</p>
+        <label class="language-picker">
+          <span>{{ t('Language') }}</span>
+          <select v-model="language">
+            <option value="en" lang="en">English</option>
+            <option value="fr" lang="fr">Français</option>
+          </select>
+        </label>
 
         <form @submit.prevent="signIn">
-          <label for="email">Email address</label>
+          <label for="email">{{ t('Email address') }}</label>
           <input
             id="email"
             v-model="email"
@@ -66,7 +74,7 @@ function signOut() {
             required
           />
 
-          <label for="password">Password</label>
+          <label for="password">{{ t('Password') }}</label>
           <input
             id="password"
             v-model="password"
@@ -76,11 +84,11 @@ function signOut() {
           />
 
           <p v-if="error" class="error" role="alert">
-            {{ error }}
+            {{ t(error) }}
           </p>
 
           <button class="login-button" type="submit">
-            Sign in
+            {{ t('Sign in') }}
           </button>
         </form>
       </section>
@@ -88,9 +96,16 @@ function signOut() {
 
     <template v-else>
       <header class="staff-header">
-        <strong>+ ClinicFlow Staff Portal</strong>
+        <strong>+ ClinicFlow · {{ t('Staff Portal') }}</strong>
+        <label class="language-picker">
+          <span>{{ t('Language') }}</span>
+          <select v-model="language">
+            <option value="en" lang="en">English</option>
+            <option value="fr" lang="fr">Français</option>
+          </select>
+        </label>
         <button type="button" @click="signOut">
-          Log out
+          {{ t('Log out') }}
         </button>
       </header>
 
@@ -210,5 +225,25 @@ input {
   border: 0;
   border-radius: 8px;
   padding: 9px 14px;
+}
+.language-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.language-picker select {
+  font: inherit;
+  color: inherit;
+  background: white;
+  border: 1px solid #cbd7e2;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.staff-header {
+  flex-wrap: wrap;
+  gap: 10px;
 }
 </style>

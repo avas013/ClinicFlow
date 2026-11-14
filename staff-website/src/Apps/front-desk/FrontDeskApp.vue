@@ -1,17 +1,18 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import {
-  clinic, staff, day, ordered, niceDate, niceTime,
+  clinic, staff, day, ordered,
   book, update, queue, moveQueue
 } from '../shared/demoStore.js'
+import { t, formatDate, formatTime } from '../../language.js'
 
 const tab = ref('appointments')
 const search = ref('')
 const showForm = ref(false)
-const notice = ref('')
+const notice = ref(null)
 const form = reactive({ patient: '', doctor: 'Dr. Smith', date: day(), time: '09:00', reason: 'Consultation', walkIn: false })
 const matches = computed(() => ordered(clinic.appointments.filter(a =>
-  `${a.patient} ${a.doctor} ${a.status}`.toLowerCase().includes(search.value.toLowerCase()),
+  `${a.patient} ${a.doctor} ${t(a.status)} ${a.status}`.toLowerCase().includes(search.value.toLowerCase()),
 )))
 const waiting = computed(() => queue())
 const today = computed(() => clinic.appointments.filter(a => a.date === day() && a.status !== 'Cancelled'))
@@ -19,7 +20,7 @@ const cancellations = computed(() => clinic.appointments.filter(a => a.status ==
 function submit() {
   if (!form.patient.trim() || !form.date || !form.time) return
   book({ patient: form.patient.trim(), doctor: form.doctor, date: form.date, time: form.time, reason: form.reason }, form.walkIn)
-  notice.value = `${form.walkIn ? 'Walk-in checked in' : 'Appointment booked'} for ${form.patient.trim()}.`
+  notice.value = { text: form.walkIn ? 'Walk-in checked in for {patient}.' : 'Appointment booked for {patient}.', patient: form.patient.trim() }
   form.patient = ''
   form.walkIn = false
   showForm.value = false
@@ -28,57 +29,57 @@ function submit() {
 function act(id, status) {
   const person = clinic.appointments.find(a => a.id === id)
   update(id, status)
-  notice.value = `${person.patient}: ${status}.`
+  notice.value = { text: '{patient} — {status}.', patient: person.patient, status }
 }
 </script>
 
 <template>
   <div class="front-screen">
     <div class="front-wrap">
-      <div class="front-heading"><div><span>FRONT DESK PORTAL</span><h1>Clinic operations</h1><p>{{ niceDate(day()) }} · Manage patient arrivals and appointments</p></div><button class="front-primary" @click="showForm = !showForm">{{ showForm ? 'Close form' : '+ New appointment' }}</button></div>
+      <div class="front-heading"><div><span>{{ t('Front Desk Portal') }}</span><h1>{{ t('Clinic operations') }}</h1><p>{{ formatDate(day()) }} · {{ t('Manage patient arrivals and appointments') }}</p></div><button class="front-primary" @click="showForm = !showForm">{{ showForm ? t('Close form') : '+ ' + t('New appointment') }}</button></div>
       <div class="front-stats">
-        <div><span>Today's appointments</span><strong>{{ today.length }}</strong></div>
-        <div><span>Waiting to be seen</span><strong>{{ waiting.length }}</strong></div>
-        <div><span>Cancellations</span><strong>{{ cancellations.length }}</strong></div>
+        <div><span>{{ t("Today's appointments") }}</span><strong>{{ today.length }}</strong></div>
+        <div><span>{{ t('Waiting to be seen') }}</span><strong>{{ waiting.length }}</strong></div>
+        <div><span>{{ t('Cancellations') }}</span><strong>{{ cancellations.length }}</strong></div>
       </div>
       <form v-if="showForm" class="front-form" @submit.prevent="submit">
-        <div class="front-card-title"><h2>Book an appointment / add walk-in</h2><span></span></div>
+        <div class="front-card-title"><h2>{{ t('Book an appointment / add walk-in') }}</h2><span></span></div>
         <div class="front-form-grid">
-          <label>Patient name<input v-model="form.patient" required maxlength="80" placeholder="e.g. Morgan Chen" /></label>
-          <label>Clinician<select v-model="form.doctor"><option v-for="s in staff" :key="s.name">{{ s.name }}</option></select></label>
-          <label>Date<input v-model="form.date" type="date" required /></label>
-          <label>Time<input v-model="form.time" type="time" required /></label>
-          <label>Visit type<select v-model="form.reason"><option>Consultation</option><option>Follow-up</option><option>Check-up</option><option>Walk-in</option></select></label>
+          <label>{{ t('Patient name') }}<input v-model="form.patient" required maxlength="80" :placeholder="t('e.g. Morgan Chen')" /></label>
+          <label>{{ t('Clinician') }}<select v-model="form.doctor"><option v-for="s in staff" :key="s.name">{{ s.name }}</option></select></label>
+          <label>{{ t('Date') }}<input v-model="form.date" type="date" required /></label>
+          <label>{{ t('Time') }}<input v-model="form.time" type="time" required /></label>
+          <label>{{ t('Visit type') }}<select v-model="form.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option><option value="Walk-in">{{ t('Walk-in') }}</option></select></label>
         </div>
-        <label class="front-check"><input v-model="form.walkIn" type="checkbox" /> Check in immediately (walk-in)</label>
-        <button type="submit" class="front-primary">Save appointment</button>
+        <label class="front-check"><input v-model="form.walkIn" type="checkbox" /> {{ t('Check in immediately (walk-in)') }}</label>
+        <button type="submit" class="front-primary">{{ t('Save appointment') }}</button>
       </form>
-      <div class="front-tabs" role="group" aria-label="Front desk sections">
-        <button :class="{ active: tab === 'appointments' }" @click="tab='appointments'">Appointments</button>
-        <button :class="{ active: tab === 'queue' }" @click="tab='queue'">Waiting list <span>{{ waiting.length }}</span></button>
+      <div class="front-tabs" role="group" :aria-label="t('Front desk sections')">
+        <button :class="{ active: tab === 'appointments' }" @click="tab='appointments'">{{ t('Appointments') }}</button>
+        <button :class="{ active: tab === 'queue' }" @click="tab='queue'">{{ t('Waiting list') }} <span>{{ waiting.length }}</span></button>
       </div>
-      <p v-if="notice" class="front-notice" role="status">{{ notice }}</p>
+      <p v-if="notice" class="front-notice" role="status">{{ t(notice.text, { patient: notice.patient, status: notice.status && t(notice.status) }) }}</p>
       <section v-if="tab === 'appointments'" class="front-card">
-        <div class="front-card-title"><h2>Appointment management</h2><label class="front-search"><span class="sr-only">Search appointments</span><input v-model="search" placeholder="Search patient, clinician or status" /></label></div>
-        <div class="front-table-scroll"><table><thead><tr><th>Patient</th><th>Date & time</th><th>Clinician</th><th>Status</th><th>Confirmation</th><th>Actions</th></tr></thead><tbody>
-          <tr v-for="a in matches" :key="a.id"><td><strong>{{ a.patient }}</strong><small>{{ a.reason }}</small></td><td>{{ niceDate(a.date) }}<small>{{ niceTime(a.time) }}</small></td><td>{{ a.doctor }}</td><td><span class="front-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ a.status }}</span></td><td><strong>{{ a.confirmed ? 'Confirmed' : a.status === 'Scheduled' ? 'Pending' : '—' }}</strong></td><td class="front-actions"><button v-if="a.status === 'Scheduled'" @click="act(a.id,'Checked in')">Check in</button><button v-if="['Scheduled','Checked in'].includes(a.status)" class="front-danger" @click="act(a.id,'Cancelled')">Cancel</button><button v-if="a.status === 'Scheduled'" @click="act(a.id,'No show')">No-show</button><button v-if="a.status === 'Cancelled'" @click="act(a.id,'Scheduled')">Restore</button><span v-if="['Completed','In progress','No show'].includes(a.status)">—</span></td></tr>
+        <div class="front-card-title"><h2>{{ t('Appointment management') }}</h2><label class="front-search"><span class="sr-only">{{ t('Search appointments') }}</span><input v-model="search" :placeholder="t('Search patient, clinician or status')" /></label></div>
+        <div class="front-table-scroll"><table><thead><tr><th>{{ t('Patient') }}</th><th>{{ t('Date & time') }}</th><th>{{ t('Clinician') }}</th><th>{{ t('Status') }}</th><th>{{ t('Confirmation') }}</th><th>{{ t('Actions') }}</th></tr></thead><tbody>
+          <tr v-for="a in matches" :key="a.id"><td><strong>{{ a.patient }}</strong><small>{{ t(a.reason) }}</small></td><td>{{ formatDate(a.date) }}<small>{{ formatTime(a.time) }}</small></td><td>{{ a.doctor }}</td><td><span class="front-status" :class="a.status.replaceAll(' ','-').toLowerCase()">{{ t(a.status) }}</span></td><td><strong>{{ t(a.confirmed ? 'Confirmed' : a.status === 'Scheduled' ? 'Pending' : '—') }}</strong></td><td class="front-actions"><button v-if="a.status === 'Scheduled'" @click="act(a.id,'Checked in')">{{ t('Check in') }}</button><button v-if="['Scheduled','Checked in'].includes(a.status)" class="front-danger" @click="act(a.id,'Cancelled')">{{ t('Cancel') }}</button><button v-if="a.status === 'Scheduled'" @click="act(a.id,'No show')">{{ t('No-show') }}</button><button v-if="a.status === 'Cancelled'" @click="act(a.id,'Scheduled')">{{ t('Restore') }}</button><span v-if="['Completed','In progress','No show'].includes(a.status)">—</span></td></tr>
         </tbody></table></div>
-        <p v-if="!matches.length" class="front-empty">No matching appointments.</p>
+        <p v-if="!matches.length" class="front-empty">{{ t('No matching appointments.') }}</p>
       </section>
       <section v-else class="front-card">
-        <div class="front-card-title"><div><h2>Live waiting list</h2><p>Patients appear here after being checked in.</p></div><span class="front-count">{{ waiting.length }} waiting</span></div>
+        <div class="front-card-title"><div><h2>{{ t('Live waiting list') }}</h2><p>{{ t('Patients appear here after being checked in.') }}</p></div><span class="front-count">{{ t('{count} waiting', { count: waiting.length }) }}</span></div>
         <div v-for="(a, index) in waiting" :key="a.id" class="front-queue-row">
           <span class="front-position">{{ index + 1 }}</span>
-          <div><strong>{{ a.patient }}</strong><p>{{ a.doctor }} · {{ niceTime(a.time) }}</p></div>
+          <div><strong>{{ a.patient }}</strong><p>{{ a.doctor }} · {{ formatTime(a.time) }}</p></div>
           <div class="front-queue-controls">
-            <button type="button" :disabled="index === 0" :aria-label="`Move ${a.patient} up`" @click="moveQueue(a.id, -1)">↑</button>
-            <button type="button" :disabled="index === waiting.length - 1" :aria-label="`Move ${a.patient} down`" @click="moveQueue(a.id, 1)">↓</button>
-            <button type="button" class="front-primary" @click="act(a.id, 'In progress')">Call patient</button>
+            <button type="button" :disabled="index === 0" :aria-label="t('Move {patient} up', { patient: a.patient })" @click="moveQueue(a.id, -1)">↑</button>
+            <button type="button" :disabled="index === waiting.length - 1" :aria-label="t('Move {patient} down', { patient: a.patient })" @click="moveQueue(a.id, 1)">↓</button>
+            <button type="button" class="front-primary" @click="act(a.id, 'In progress')">{{ t('Call patient') }}</button>
           </div>
         </div>
-        <p v-if="!waiting.length" class="front-empty">No patients in the waiting list.</p>
+        <p v-if="!waiting.length" class="front-empty">{{ t('No patients in the waiting list.') }}</p>
       </section>
-      <p class="front-footer">Manage appointments and waiting order from the staff portal.</p>
+      <p class="front-footer">{{ t('Manage appointments and waiting order from the staff portal.') }}</p>
     </div>
   </div>
 </template>
