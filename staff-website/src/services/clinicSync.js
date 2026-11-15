@@ -5,7 +5,9 @@ import { createClient } from '@supabase/supabase-js'
 const url = import.meta.env.VITE_SUPABASE_URL
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
 export const cloudConfigured = Boolean(url && key)
-const supabase = cloudConfigured ? createClient(url, key) : null
+const supabase = cloudConfigured ? createClient(url, key, {
+  global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
+}) : null
 
 export const syncState = reactive({
   mode: cloudConfigured ? 'signed-out' : 'local',
@@ -31,6 +33,7 @@ let knownNotifications = new Set()
 let notificationsInitialized = false
 let currentUserId = null
 let refreshInFlight = null
+let savePromise = null
 
 const fields = a => ({
   doctor: String(a.doctor || ''), date: String(a.date || ''), time: String(a.time || ''),
@@ -44,9 +47,37 @@ const toLocal = a => ({
   confirmed: a.confirmed, queuePosition: a.queue_position,
 })
 
+const LOCAL_KEY = 'clinicflow-appointments-v2'
+function reloadLocalAppointments(showMessage = false) {
+  if (!store) throw new Error('Appointment store is not ready.')
+  const raw = localStorage.getItem(LOCAL_KEY)
+  if (!raw) {
+    if (showMessage) syncState.toast = 'Local demo only: there are no stored appointments to reload.'
+    return
+  }
+  const parsed = JSON.parse(raw)
+  if (!Array.isArray(parsed)) throw new Error('Saved appointments are not a valid list.')
+  const appointments = parsed.filter(a => a && Number.isInteger(a.id) && typeof a.patient === 'string')
+  applyingRemote = true
+  try {
+    store.appointments.splice(0, store.appointments.length, ...appointments)
+  } finally {
+    applyingRemote = false
+  }
+  syncState.lastUpdated = Date.now()
+  syncState.error = ''
+  if (showMessage) syncState.toast = 'Refreshed from this browser only. Supabase is not connected.'
+}
+function onLocalStorage(event) {
+  if (cloudConfigured || event.key !== LOCAL_KEY) return
+  try { reloadLocalAppointments(false) } catch (e) { syncState.error = 'Local refresh failed: ' + e.message }
+}
 export function attachClinicStore(clinic) {
   if (store) return
   store = clinic
+  if (!cloudConfigured && typeof window !== 'undefined') {
+    window.addEventListener('storage', onLocalStorage)
+  }
   watch(() => store.appointments, () => {
     if (applyingRemote || !syncState.ready || !cloudConfigured) return
     clearTimeout(debounce)
@@ -130,7 +161,7 @@ function scheduleRefresh() {
   refreshDelay = setTimeout(() => { refreshAll().catch(() => {}) }, 250)
 }
 
-export async function refreshAll(force = false) {
+export async function refreshAll(force = false, manual = false) {
   if (!cloudConfigured) {
     // This is a local demo, not shared storage.
     syncState.toast = 'Local demo only. Set up Supabase to synchronize devices.'
@@ -146,8 +177,13 @@ export async function refreshAll(force = false) {
     debounce = null
     await saveChanges()
   }
-  if (inFlight && !force) return
-  if (refreshInFlight) return refreshInFlight
+  // Realtime/poll/manual requests must not be dropped during an appointment save.
+  if (!force && savePromise) await savePromise
+  if (refreshInFlight) {
+    await refreshInFlight
+    if (!manual) return
+    // A manual click must make a NEW request, not reuse an older in-flight response.
+  }
   const generation = activeGeneration
   refreshInFlight = (async () => {
     syncState.refreshing = true
@@ -211,7 +247,12 @@ async function findPatientId(patientName) {
   return data[0].id
 }
 
-async function saveChanges() {
+function saveChanges() {
+  if (savePromise) return savePromise
+  savePromise = performSaveChanges().finally(() => { savePromise = null })
+  return savePromise
+}
+async function performSaveChanges() {
   debounce = null
   if (inFlight || !syncState.ready || !store || !currentUserId) return
   const current = [...store.appointments]
@@ -256,5 +297,22 @@ async function saveChanges() {
       clearTimeout(debounce)
       debounce = setTimeout(saveChanges, 200)
     }
+  }
+}
+
+/** Explicit button action; always fetches from Supabase after pending saves. */
+export async function refreshNow() {
+  syncState.toast = ''
+  try {
+    if (!cloudConfigured) {
+      reloadLocalAppointments(true)
+      return
+    }
+    if (!currentUserId) throw new Error('Not connected to Supabase. Sign in again to connect.')
+    await refreshAll(false, true)
+    if (syncState.error) throw new Error(syncState.error)
+    syncState.toast = 'Appointments and notifications refreshed from Supabase.'
+  } catch (e) {
+    syncState.error = 'Refresh failed: ' + (e.message || e)
   }
 }
