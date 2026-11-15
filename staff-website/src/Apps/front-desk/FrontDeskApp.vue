@@ -79,7 +79,7 @@ function act(id, status) {
         </div>
         <p v-if="!waiting.length" class="front-empty">{{ t('No patients in the waiting list.') }}</p>
       </section>
-      <p class="front-footer">{{ t('Manage appointments and waiting order from the staff portal.') }}</p>
+      <p class="front-footer">{{ t('Manage appointments and waiting order from the ClinicFlow Website.') }}</p>
     </div>
   </div>
 </template>
