@@ -1,3 +1,4 @@
+import { cloudConfigured, attachClinicStore } from '../../services/clinicSync.js'
 import { reactive, watch } from 'vue'
 
 // Shared local appointment data for the staff website.
@@ -30,6 +31,7 @@ const initialAppointments = [
 const STORAGE_KEY = 'clinicflow-appointments-v2'
 
 function load() {
+  if (cloudConfigured) return []
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return initialAppointments.map(a => ({ ...a }))
@@ -46,6 +48,7 @@ function load() {
 export const clinic = reactive({ appointments: load() })
 
 watch(() => clinic.appointments, () => {
+  if (cloudConfigured) return
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clinic.appointments))
   } catch {
@@ -92,7 +95,7 @@ function numberQueue() {
 export function book(data, checkedIn = false) {
   if (checkedIn) numberQueue()
   const entry = {
-    id: nextId++,
+    id: cloudConfigured ? Date.now() * 1000 + Math.floor(Math.random() * 1000) : nextId++,
     patient: data.patient.trim(),
     doctor: data.doctor,
     date: data.date,
@@ -150,7 +153,11 @@ export function moveQueue(id, direction) {
 }
 
 export function resetDemo() {
+  if (cloudConfigured) return false
   clinic.appointments.splice(0, clinic.appointments.length,
     ...initialAppointments.map(a => ({ ...a })))
   nextId = 9
 }
+
+// Bind the existing reactive appointment store to Supabase without changing the UI APIs.
+attachClinicStore(clinic)

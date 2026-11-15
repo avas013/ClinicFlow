@@ -1,5 +1,7 @@
 
 <script setup>
+import SyncToolbar from './services/SyncToolbar.vue'
+import { cloudConfigured, cloudLogin, cloudLogout, startClinicSync, stopClinicSync } from './services/clinicSync.js'
 import PatientWebApp from './Apps/patient/PatientWebApp.vue'
 import { ref } from 'vue'
 import { language, t } from './language.js'
@@ -27,7 +29,29 @@ const password = ref('')
 const error = ref('')
 const currentUser = ref(null)
 
-function signIn() {
+async function signIn() {
+  if (cloudConfigured) {
+    error.value = ''
+    try {
+      const signedIn = await cloudLogin(email.value, password.value)
+      const role = signedIn.role === 'nurse' ? 'doctor' : signedIn.role
+      if (platform.value === 'mobile' && !['patient', 'doctor'].includes(role)) {
+        throw new Error('This account is for the ClinicFlow website.')
+      }
+      if (platform.value === 'web' && !['patient', 'frontdesk', 'admin'].includes(role)) {
+        throw new Error('This account is for the mobile application.')
+      }
+      currentUser.value = { ...signedIn, role }
+      password.value = ''
+      await startClinicSync()
+    } catch (e) {
+      stopClinicSync()
+      currentUser.value = null
+      error.value = e.message || String(e)
+    }
+    return
+  }
+
   const account = accounts.find(a =>
     a.email === email.value.trim().toLowerCase() &&
     a.password === password.value
@@ -44,6 +68,8 @@ function signIn() {
 }
 
 function signOut() {
+  if (cloudConfigured) void cloudLogout()
+
   currentUser.value = null
   email.value = ''
   password.value = ''
@@ -52,6 +78,7 @@ function signOut() {
 </script>
 
 <template>
+  <SyncToolbar v-if="currentUser" />
   <div class="staff-shell">
     <main v-if="!currentUser" class="login-layout">
       <section class="login-card">
