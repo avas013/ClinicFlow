@@ -1,17 +1,18 @@
 <script setup>
+import { syncState, markRead } from '../../services/clinicSync.js'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { clinic, book, confirmAppointment, day, ordered, staff, queue } from '../shared/demoStore.js'
 import { language, t, formatDate, formatTime, countLabel } from '../../language.js'
 import PatientCalendar from './PatientCalendar.vue'
 
-const patientName = 'Jordan Taylor'
-const queuePosition = computed(() => queue().findIndex(a => a.patient === patientName) + 1)
+const patientName = computed(() => syncState.profile?.full_name || 'Jordan Taylor')
+const queuePosition = computed(() => queue().findIndex(a => a.patient === patientName.value) + 1)
 const now = ref(new Date())
 const minDate = computed(() => now.value.toLocaleDateString('en-CA'))
 const closedStatuses = ['Completed', 'Cancelled', 'No show']
 const activeVisitStatuses = ['Checked in', 'In progress']
 const patientAppointments = computed(() => ordered(clinic.appointments.filter(appointment =>
-  appointment.patient.trim().toLowerCase() === patientName.toLowerCase()
+  appointment.patient.trim().toLowerCase() === patientName.value.toLowerCase()
 )))
 
 function isInHistory(appointment) {
@@ -62,7 +63,7 @@ function slotsFor(date) {
   const [start, end] = provider.shift.split('–').map(minutes)
   const now = Date.now()
   const active = clinic.appointments.filter(a =>
-    a.date === date && (a.doctor === booking.doctor || a.patient.toLowerCase() === patientName.toLowerCase()) &&
+    a.date === date && (a.doctor === booking.doctor || a.patient.toLowerCase() === patientName.value.toLowerCase()) &&
     !['Cancelled', 'No show'].includes(a.status)
   )
   const slots = []
@@ -111,13 +112,13 @@ function saveBooking() {
     statusMessage.value = 'That time is no longer available. Choose another time.'
     return
   }
-  book({ patient: patientName, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
+  book({ patient: patientName.value, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
   booking.time = ''
   goHome()
   statusMessage.value = 'Appointment booked. Please confirm your attendance.'
 }
 function confirm(id) {
-  if (confirmAppointment(id, patientName)) statusMessage.value = 'Appointment confirmed.'
+  if (confirmAppointment(id, patientName.value)) statusMessage.value = 'Appointment confirmed.'
 }
 function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; feedback.message = '' }
 </script>
@@ -272,13 +273,19 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
         <!-- PROFILE AND NOTIFICATIONS -->
         <section v-else-if="currentPage === 'profile'" class="detail-screen" aria-labelledby="profile-heading">
           <h1 id="profile-heading" class="section-heading">{{ t('Profile') }}</h1>
-          <div class="detail-card"><strong>Jordan Taylor</strong><p>{{ t('Patient account') }}</p><p>{{ t('Manage your appointments and account from ClinicFlow.') }}</p></div>
+          <div class="detail-card"><strong>{{ patientName }}</strong><p>{{ t('Patient account') }}</p><p>{{ t('Manage your appointments and account from ClinicFlow.') }}</p></div>
         </section>
 
         <section v-else-if="currentPage === 'notifications'" class="detail-screen" aria-labelledby="notifications-heading">
-          <h1 id="notifications-heading" class="section-heading">{{ t('Notifications') }}</h1>
-          <div class="detail-card"><strong>{{ t('Upcoming appointment') }}</strong><p v-if="sortedAppointments.length">{{ sortedAppointments[0].doctor }} · {{ t('{date} at {time}', { date: formatDate(sortedAppointments[0].date), time: formatTime(sortedAppointments[0].time) }) }}</p><p>{{ t('Check your upcoming appointments and confirmation status.') }}</p></div>
-        </section>
+          <h1 id="notifications-heading" class="section-heading">Notifications</h1>
+          <p v-if="!syncState.notifications.length" class="screen-description">No appointment notifications yet.</p>
+          <article v-for="note in syncState.notifications" :key="note.id" class="detail-card">
+            <strong>{{ note.read_at ? 'Appointment update' : 'New appointment update' }}</strong>
+            <p>{{ note.message }}</p>
+            <small>{{ new Date(note.created_at).toLocaleString() }}</small>
+            <div><button v-if="!note.read_at" class="primary-button" type="button" @click="markRead(note.id)">Mark as read</button></div>
+          </article>
+          </section>
 
         <section v-else-if="currentPage === 'settings'" class="detail-screen" aria-labelledby="settings-heading">
           <h1 id="settings-heading" class="section-heading">{{ t('Settings') }}</h1>
@@ -343,6 +350,7 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
 </template>
 
 <style scoped>
+.cf-bell-count{color:#f47730;font-size:12px;position:relative;line-height:1;}
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :global(*) { box-sizing: border-box; }
