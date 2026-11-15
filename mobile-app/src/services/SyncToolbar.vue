@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { syncState, cloudConfigured, refreshAll, enableDesktopAlerts, markRead } from './clinicSync.js'
+import { syncState, cloudConfigured, refreshNow, enableDesktopAlerts, markRead } from './clinicSync.js'
 const showNotifications = ref(false)
 const message = ref('')
 const unread = computed(() => syncState.notifications.filter(n => !n.read_at).length)
@@ -28,7 +28,7 @@ async function read(note) {
       <small v-if="syncState.lastUpdated">Last checked {{ new Date(syncState.lastUpdated).toLocaleTimeString() }}</small>
     </div>
     <div class="cf-syncbar-actions">
-      <button class="cf-sync-button" type="button" :disabled="syncState.refreshing || syncState.saving" @click="refreshAll()">↻ Refresh</button>
+      <button class="cf-sync-button" type="button" :disabled="syncState.refreshing || syncState.saving" @click="refreshNow">↻ Refresh</button>
       <button class="cf-sync-button" type="button" :aria-expanded="showNotifications" @click="showNotifications = !showNotifications">
         ♧ Notifications <span v-if="unread" class="cf-unread">{{ unread }}</span>
       </button>
