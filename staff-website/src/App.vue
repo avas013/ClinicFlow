@@ -1,7 +1,14 @@
-
 <script setup>
+import './styles/doctor-web.css'
+import DoctorNurseApp from './Apps/doctor-nurse/DoctorNurseApp.vue'
 import SyncToolbar from './services/SyncToolbar.vue'
-import { cloudConfigured, cloudLogin, cloudLogout, startClinicSync, stopClinicSync } from './services/clinicSync.js'
+import {
+  cloudConfigured,
+  cloudLogin,
+  cloudLogout,
+  startClinicSync,
+  stopClinicSync
+} from './services/clinicSync.js'
 import PatientWebApp from './Apps/patient/PatientWebApp.vue'
 import { ref } from 'vue'
 import { language, t } from './language.js'
@@ -9,18 +16,31 @@ import FrontDeskApp from './Apps/front-desk/FrontDeskApp.vue'
 import AdministratorApp from './Apps/administrator/AdministratorApp.vue'
 
 // Temporary development accounts.
-// Replace with Supabase Auth before real deployment.
+// Only used when Supabase is not configured.
 const accounts = [
-  { email: 'patient@clinicflow.demo', password: 'Demo1234!', role: 'patient', name: 'Jordan Taylor', platform: 'web' },
+  {
+    email: 'doctor@clinicflow.demo',
+    password: 'Demo1234!',
+    role: 'doctor',
+    name: 'Dr. Smith'
+  },
+  {
+    email: 'patient@clinicflow.demo',
+    password: 'Demo1234!',
+    role: 'patient',
+    name: 'Jordan Taylor'
+  },
   {
     email: 'frontdesk@clinicflow.demo',
     password: 'Demo1234!',
-    role: 'frontdesk'
+    role: 'frontdesk',
+    name: 'Front Desk Staff'
   },
   {
     email: 'admin@clinicflow.demo',
     password: 'Demo1234!',
-    role: 'admin'
+    role: 'admin',
+    name: 'Administrator'
   }
 ]
 
@@ -29,29 +49,45 @@ const password = ref('')
 const error = ref('')
 const currentUser = ref(null)
 
+// Login
 async function signIn() {
+  error.value = ''
+
+  // Supabase authentication
   if (cloudConfigured) {
-    error.value = ''
     try {
       const signedIn = await cloudLogin(email.value, password.value)
-      const role = signedIn.role === 'nurse' ? 'doctor' : signedIn.role
-      if (platform.value === 'mobile' && !['patient', 'doctor'].includes(role)) {
-        throw new Error('This account is for the ClinicFlow website.')
+
+      // Nurses use the Doctor/Nurse interface.
+      const role = signedIn.role === 'nurse'
+        ? 'doctor'
+        : signedIn.role
+
+      // Allow all four roles on the website.
+      if (!['patient', 'doctor', 'frontdesk', 'admin'].includes(role)) {
+        throw new Error('This account does not have access to ClinicFlow.')
       }
-      if (platform.value === 'web' && !['patient', 'frontdesk', 'admin'].includes(role)) {
-        throw new Error('This account is for the mobile application.')
+
+      currentUser.value = {
+        ...signedIn,
+        role
       }
-      currentUser.value = { ...signedIn, role }
+
       password.value = ''
+
+      // Start shared appointment synchronization.
       await startClinicSync()
+
     } catch (e) {
       stopClinicSync()
       currentUser.value = null
       error.value = e.message || String(e)
     }
+
     return
   }
 
+  // Local demo authentication
   const account = accounts.find(a =>
     a.email === email.value.trim().toLowerCase() &&
     a.password === password.value
@@ -62,13 +98,23 @@ async function signIn() {
     return
   }
 
-  currentUser.value = account
-  error.value = ''
+  currentUser.value = {
+    name: account.name,
+    email: account.email,
+    role: account.role
+  }
+
   password.value = ''
+  error.value = ''
 }
 
+// Logout
 function signOut() {
-  if (cloudConfigured) void cloudLogout()
+  stopClinicSync()
+
+  if (cloudConfigured) {
+    void cloudLogout()
+  }
 
   currentUser.value = null
   email.value = ''
@@ -79,14 +125,21 @@ function signOut() {
 
 <template>
   <SyncToolbar v-if="currentUser" />
+
   <div class="staff-shell">
+
+    <!-- LOGIN SCREEN -->
     <main v-if="!currentUser" class="login-layout">
       <section class="login-card">
+
         <div class="logo">+</div>
+
         <h1>ClinicFlow</h1>
         <p>{{ t('ClinicFlow Website') }}</p>
+
         <label class="language-picker">
           <span>{{ t('Language') }}</span>
+
           <select v-model="language">
             <option value="en" lang="en">English</option>
             <option value="fr" lang="fr">Français</option>
@@ -94,7 +147,11 @@ function signOut() {
         </label>
 
         <form @submit.prevent="signIn">
-          <label for="email">{{ t('Email address') }}</label>
+
+          <label for="email">
+            {{ t('Email address') }}
+          </label>
+
           <input
             id="email"
             v-model="email"
@@ -103,7 +160,10 @@ function signOut() {
             required
           />
 
-          <label for="password">{{ t('Password') }}</label>
+          <label for="password">
+            {{ t('Password') }}
+          </label>
+
           <input
             id="password"
             v-model="password"
@@ -119,29 +179,60 @@ function signOut() {
           <button class="login-button" type="submit">
             {{ t('Sign in') }}
           </button>
+
         </form>
       </section>
     </main>
 
+    <!-- LOGGED-IN WEBSITE -->
     <template v-else>
+
       <header class="staff-header">
-        <strong>+ ClinicFlow · {{ t('ClinicFlow Website') }}</strong>
+
+        <strong>
+          + ClinicFlow · {{ t('ClinicFlow Website') }}
+        </strong>
+
         <label class="language-picker">
           <span>{{ t('Language') }}</span>
+
           <select v-model="language">
             <option value="en" lang="en">English</option>
             <option value="fr" lang="fr">Français</option>
           </select>
         </label>
+
         <button type="button" @click="signOut">
           {{ t('Log out') }}
         </button>
+
       </header>
 
-      <PatientWebApp v-if="currentUser.role === 'patient'" />
-      <FrontDeskApp v-else-if="currentUser.role === 'frontdesk'" />
-      <AdministratorApp v-else-if="currentUser.role === 'admin'" />
+      <!-- PATIENT -->
+      <PatientWebApp
+        v-if="currentUser.role === 'patient'"
+      />
+
+      <!-- DOCTOR / NURSE -->
+      <div
+        v-else-if="currentUser.role === 'doctor'"
+        class="clinicflow-doctor-host"
+      >
+        <DoctorNurseApp />
+      </div>
+
+      <!-- FRONT DESK -->
+      <FrontDeskApp
+        v-else-if="currentUser.role === 'frontdesk'"
+      />
+
+      <!-- ADMINISTRATOR -->
+      <AdministratorApp
+        v-else-if="currentUser.role === 'admin'"
+      />
+
     </template>
+
   </div>
 </template>
 
@@ -159,7 +250,8 @@ function signOut() {
   box-sizing: border-box;
 }
 
-button, input {
+button,
+input {
   font: inherit;
 }
 
@@ -230,6 +322,11 @@ input {
   border-radius: 9px;
   margin-top: 10px;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.login-button:hover {
+  background: #19598f;
 }
 
 .error {
@@ -246,7 +343,8 @@ input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .staff-header button {
@@ -255,7 +353,9 @@ input {
   border: 0;
   border-radius: 8px;
   padding: 9px 14px;
+  cursor: pointer;
 }
+
 .language-picker {
   display: flex;
   align-items: center;
@@ -272,8 +372,13 @@ input {
   padding: 6px;
 }
 
-.staff-header {
-  flex-wrap: wrap;
-  gap: 10px;
+@media (max-width: 600px) {
+  .login-card {
+    padding: 24px;
+  }
+
+  .staff-header {
+    padding: 12px 16px;
+  }
 }
 </style>

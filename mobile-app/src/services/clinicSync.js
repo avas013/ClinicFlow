@@ -149,7 +149,7 @@ export async function startClinicSync() {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') syncState.mode = 'polling'
       if (status === 'SUBSCRIBED') syncState.mode = 'cloud'
     })
-  timer = setInterval(() => { refreshAll().catch(() => {}) }, 45000)
+  timer = setInterval(() => { refreshAll().catch(() => {}) }, 5000)
   document.addEventListener('visibilitychange', onVisibility)
   window.addEventListener('focus', onFocus)
 }
