@@ -1,5 +1,6 @@
 
 <script setup>
+import PatientWebApp from './Apps/patient/PatientWebApp.vue'
 import { ref } from 'vue'
 import { language, t } from './language.js'
 import FrontDeskApp from './Apps/front-desk/FrontDeskApp.vue'
@@ -8,6 +9,7 @@ import AdministratorApp from './Apps/administrator/AdministratorApp.vue'
 // Temporary development accounts.
 // Replace with Supabase Auth before real deployment.
 const accounts = [
+  { email: 'patient@clinicflow.demo', password: 'Demo1234!', role: 'patient', name: 'Jordan Taylor', platform: 'web' },
   {
     email: 'frontdesk@clinicflow.demo',
     password: 'Demo1234!',
@@ -55,7 +57,7 @@ function signOut() {
       <section class="login-card">
         <div class="logo">+</div>
         <h1>ClinicFlow</h1>
-        <p>{{ t('Staff Portal') }}</p>
+        <p>{{ t('ClinicFlow Website') }}</p>
         <label class="language-picker">
           <span>{{ t('Language') }}</span>
           <select v-model="language">
@@ -96,7 +98,7 @@ function signOut() {
 
     <template v-else>
       <header class="staff-header">
-        <strong>+ ClinicFlow · {{ t('Staff Portal') }}</strong>
+        <strong>+ ClinicFlow · {{ t('ClinicFlow Website') }}</strong>
         <label class="language-picker">
           <span>{{ t('Language') }}</span>
           <select v-model="language">
@@ -109,7 +111,8 @@ function signOut() {
         </button>
       </header>
 
-      <FrontDeskApp v-if="currentUser.role === 'frontdesk'" />
+      <PatientWebApp v-if="currentUser.role === 'patient'" />
+      <FrontDeskApp v-else-if="currentUser.role === 'frontdesk'" />
       <AdministratorApp v-else-if="currentUser.role === 'admin'" />
     </template>
   </div>
