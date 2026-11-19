@@ -1,4 +1,5 @@
 <script setup>
+import SlotPicker from '../shared/SlotPicker.vue'
 import { ref, reactive, computed } from 'vue'
 import {
   clinic, staff, day, ordered,
@@ -19,7 +20,12 @@ const today = computed(() => clinic.appointments.filter(a => a.date === day() &&
 const cancellations = computed(() => clinic.appointments.filter(a => a.status === 'Cancelled'))
 function submit() {
   if (!form.patient.trim() || !form.date || !form.time) return
-  book({ patient: form.patient.trim(), doctor: form.doctor, date: form.date, time: form.time, reason: form.reason }, form.walkIn)
+  try {
+    book({ patient: form.patient.trim(), doctor: form.doctor, date: form.date, time: form.time, reason: form.reason }, form.walkIn)
+  } catch (error) {
+    notice.value = error.message || 'The chosen slot is no longer available.'
+    return
+  }
   notice.value = { text: form.walkIn ? 'Walk-in checked in for {patient}.' : 'Appointment booked for {patient}.', patient: form.patient.trim() }
   form.patient = ''
   form.walkIn = false
@@ -48,7 +54,7 @@ function act(id, status) {
           <label>{{ t('Patient name') }}<input v-model="form.patient" required maxlength="80" :placeholder="t('e.g. Morgan Chen')" /></label>
           <label>{{ t('Clinician') }}<select v-model="form.doctor"><option v-for="s in staff" :key="s.name">{{ s.name }}</option></select></label>
           <label>{{ t('Date') }}<input v-model="form.date" type="date" required /></label>
-          <label>{{ t('Time') }}<input v-model="form.time" type="time" required /></label>
+          <label>{{ t('Time') }}<SlotPicker v-model="form.time" :date="form.date" :doctor="form.doctor" :appointments="clinic.appointments" /></label>
           <label>{{ t('Visit type') }}<select v-model="form.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option><option value="Walk-in">{{ t('Walk-in') }}</option></select></label>
         </div>
         <label class="front-check"><input v-model="form.walkIn" type="checkbox" /> {{ t('Check in immediately (walk-in)') }}</label>

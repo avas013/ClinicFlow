@@ -1,8 +1,11 @@
+
 <script setup>
+import SlotPicker from '../shared/SlotPicker.vue'
 import { ref, computed, reactive, watch } from 'vue'
 import { clinic, staff, day, ordered, update, book } from '../shared/demoStore.js'
 import { t, formatDate, formatTime, countLabel } from '../../language.js'
 import PatientCalendar from '../patient/PatientCalendar.vue'
+
 
 const doctor = ref('Dr. Smith')
 const tab = ref('schedule')
@@ -36,10 +39,10 @@ function slotsFor(date) {
   })
   const slots = []
   const now = Date.now()
-  for (let minute = start; minute + 30 <= end; minute += 30) {
+  for (let minute = start; minute + 15 <= end; minute += 15) {
     const time = `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
     if (new Date(`${date}T${time}:00`).getTime() > now &&
-        !occupied.some(booked => Math.abs(booked - minute) < 30)) slots.push(time)
+        !occupied.some(booked => Math.abs(booked - minute) < 15)) slots.push(time)
   }
   return slots
 }
@@ -56,7 +59,14 @@ function createVisit() {
     bookingError.value = 'That time is no longer available. Choose another time.'
     return
   }
-  book({ patient: newVisit.patient, doctor: doctor.value, date: newVisit.date, time: newVisit.time, reason: newVisit.reason })
+  try {
+    book({ patient: newVisit.patient, doctor: doctor.value, date: newVisit.date, time: newVisit.time, reason: newVisit.reason })
+  } catch (error) {
+    newVisit.time = ''
+    bookingError.value = error.message || 'The chosen slot is no longer available.'
+    return
+  }
+  bookingError.value = ''
   message.value = { text: 'Appointment booked for {patient}. The patient can now confirm it.', patient: newVisit.patient }
   showBooking.value = false
   scheduleDate.value = newVisit.date
@@ -101,10 +111,7 @@ function rebook(a) {
           <p>{{ formatDate(newVisit.date) }}</p>
         </div>
         <label>{{ t('Time') }}
-          <select v-model="newVisit.time" :disabled="!availableTimes.length" required>
-            <option value="" disabled>{{ t(availableTimes.length ? 'Choose a time' : 'No times available') }}</option>
-            <option v-for="time in availableTimes" :key="time" :value="time">{{ formatTime(time) }}</option>
-          </select>
+          <SlotPicker v-model="newVisit.time" :date="newVisit.date" :doctor="doctor" :appointments="clinic.appointments" />
         </label>
         <label>{{ t('Visit type') }} <select v-model="newVisit.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option></select></label>
         <p v-if="bookingError" class="staff-message clinic-calendar" role="alert">{{ t(bookingError) }}</p>

@@ -1,4 +1,5 @@
 <script setup>
+import SlotPicker from '../shared/SlotPicker.vue'
 import { ref, computed, reactive } from 'vue'
 import { clinic, staff, day, ordered, update, book } from '../shared/demoStore.js'
 import { t, formatDate, formatTime, countLabel } from '../../language.js'
@@ -10,7 +11,12 @@ const showBooking = ref(false)
 const newVisit = reactive({ patient: 'Jordan Taylor', date: day(1), time: '11:30', reason: 'Follow-up' })
 function createVisit() {
   if (!newVisit.patient.trim() || !newVisit.date || !newVisit.time) return
-  book({ patient: newVisit.patient, doctor: doctor.value, date: newVisit.date, time: newVisit.time, reason: newVisit.reason })
+  try {
+    book({ patient: newVisit.patient, doctor: doctor.value, date: newVisit.date, time: newVisit.time, reason: newVisit.reason })
+  } catch (error) {
+    message.value = error.message || 'The chosen slot is no longer available.'
+    return
+  }
   message.value = { text: 'Appointment booked for {patient}. The patient can now confirm it.', patient: newVisit.patient }
   showBooking.value = false
 }
@@ -23,7 +29,12 @@ function changeStatus(a, status) {
   message.value = { text: '{patient} — {status}.', patient: a.patient, status }
 }
 function rebook(a) {
-  book({ patient: a.patient, doctor: a.doctor, date: day(7), time: a.time, reason: a.reason })
+  try {
+    book({ patient: a.patient, doctor: a.doctor, date: day(7), time: a.time, reason: a.reason })
+  } catch (error) {
+    message.value = error.message || 'The chosen slot is no longer available.'
+    return
+  }
   message.value = { text: 'Follow-up for {patient} booked for {date}. The patient can confirm it in their app.', patient: a.patient, date: day(7) }
 }
 </script>
@@ -42,7 +53,7 @@ function rebook(a) {
         <h2>{{ t('Book appointment for patient') }}</h2>
         <label>{{ t('Patient name') }} <input v-model="newVisit.patient" required /></label>
         <label>{{ t('Date') }} <input v-model="newVisit.date" type="date" required /></label>
-        <label>{{ t('Time') }} <input v-model="newVisit.time" type="time" required /></label>
+        <label>{{ t('Time') }} <SlotPicker v-model="newVisit.time" :date="newVisit.date" :doctor="doctor" :appointments="clinic.appointments" /></label>
         <label>{{ t('Visit type') }} <select v-model="newVisit.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option></select></label>
         <button class="staff-primary" type="submit">{{ t('Save appointment') }}</button>
       </form>
