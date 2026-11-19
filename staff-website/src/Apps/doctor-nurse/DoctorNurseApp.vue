@@ -8,13 +8,15 @@ const doctor = ref('Dr. Smith')
 const tab = ref('schedule')
 const message = ref(null)
 const showBooking = ref(false)
-const newVisit = reactive({ patient: 'Jordan Taylor', date: day(1), time: '11:30', reason: 'Follow-up' })
+const newVisit = reactive({ patient: 'Jordan Taylor', date: day(1), time: '', reason: 'Follow-up' })
 function createVisit() {
   if (!newVisit.patient.trim() || !newVisit.date || !newVisit.time) return
   try {
     book({ patient: newVisit.patient, doctor: doctor.value, date: newVisit.date, time: newVisit.time, reason: newVisit.reason })
   } catch (error) {
-    message.value = error.message || 'The chosen slot is no longer available.'
+    message.value = {
+  text: error.message || 'The chosen slot is no longer available.'
+}
     return
   }
   message.value = { text: 'Appointment booked for {patient}. The patient can now confirm it.', patient: newVisit.patient }
@@ -29,13 +31,12 @@ function changeStatus(a, status) {
   message.value = { text: '{patient} — {status}.', patient: a.patient, status }
 }
 function rebook(a) {
-  try {
-    book({ patient: a.patient, doctor: a.doctor, date: day(7), time: a.time, reason: a.reason })
-  } catch (error) {
-    message.value = error.message || 'The chosen slot is no longer available.'
-    return
-  }
-  message.value = { text: 'Follow-up for {patient} booked for {date}. The patient can confirm it in their app.', patient: a.patient, date: day(7) }
+  newVisit.patient = a.patient
+  newVisit.date = day(7)
+  newVisit.time = ''
+  newVisit.reason = 'Follow-up'
+  message.value = null
+  showBooking.value = true
 }
 </script>
 
@@ -55,7 +56,9 @@ function rebook(a) {
         <label>{{ t('Date') }} <input v-model="newVisit.date" type="date" required /></label>
         <label>{{ t('Time') }} <SlotPicker v-model="newVisit.time" :date="newVisit.date" :doctor="doctor" :appointments="clinic.appointments" /></label>
         <label>{{ t('Visit type') }} <select v-model="newVisit.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option></select></label>
-        <button class="staff-primary" type="submit">{{ t('Save appointment') }}</button>
+        <button class="staff-primary" type="submit" :disabled="!newVisit.time">
+  {{ t('Save appointment') }}
+</button>
       </form>
       <div class="staff-stats">
         <div><span>{{ t("Today's visits") }}</span><strong>{{ today.length }}</strong><small>{{ t('Assigned appointments') }}</small></div>

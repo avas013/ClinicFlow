@@ -8,8 +8,8 @@ const syncLabel = computed(() => {
   if (!cloudConfigured) return 'Local demo — not shared'
   if (syncState.refreshing) return 'Refreshing…'
   if (syncState.saving) return 'Saving…'
-  if (syncState.mode === 'polling') return 'Online · checking every 45 seconds'
-  if (syncState.ready) return 'Synced · checks every 45 seconds'
+  if (syncState.mode === 'polling') return 'Online · checking every 5 seconds'
+  if (syncState.ready) return 'Synced · checks every 5 seconds'
   return 'Not connected'
 })
 async function askForNotifications() {
