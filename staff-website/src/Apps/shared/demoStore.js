@@ -1,3 +1,4 @@
+import { assertBookableSlot } from './bookingAvailability.js'
 import { cloudConfigured, attachClinicStore } from '../../services/clinicSync.js'
 import { reactive, watch } from 'vue'
 
@@ -93,6 +94,7 @@ function numberQueue() {
 }
 
 export function book(data, checkedIn = false) {
+  assertBookableSlot(data, clinic.appointments);
   if (checkedIn) numberQueue()
   const entry = {
     id: cloudConfigured ? Date.now() * 1000 + Math.floor(Math.random() * 1000) : nextId++,

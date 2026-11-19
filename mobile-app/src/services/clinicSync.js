@@ -316,3 +316,13 @@ export async function refreshNow() {
     syncState.error = 'Refresh failed: ' + (e.message || e)
   }
 }
+
+export async function loadBusySlots(date, doctor) {
+  if (!cloudConfigured || !supabase) return [];
+  const { data, error } = await supabase.rpc('clinicflow_busy_slots', {
+    p_date: date,
+    p_doctor: doctor,
+  });
+  if (error) throw error;
+  return (data || []).map(row => row.slot_time);
+}

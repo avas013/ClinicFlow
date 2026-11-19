@@ -112,7 +112,12 @@ function saveBooking() {
     statusMessage.value = 'That time is no longer available. Choose another time.'
     return
   }
-  book({ patient: patientName.value, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
+  try {
+    book({ patient: patientName.value, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
+  } catch (error) {
+    statusMessage.value = error.message || 'That appointment slot is not available.'
+    return
+  }
   booking.time = ''
   goHome()
   statusMessage.value = 'Appointment booked. Please confirm your attendance.'
@@ -121,6 +126,17 @@ function confirm(id) {
   if (confirmAppointment(id, patientName.value)) statusMessage.value = 'Appointment confirmed.'
 }
 function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; feedback.message = '' }
+
+const expandedAppointmentIds = ref(new Set())
+// Set VITE_CLINIC_OFFICE_ADDRESS in Vercel when you have a real address.
+const clinicOfficeAddress = import.meta.env.VITE_CLINIC_OFFICE_ADDRESS || 'Address will be provided by the clinic.'
+function toggleAppointmentDetails(id) {
+  const next = new Set(expandedAppointmentIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedAppointmentIds.value = next
+}
+
 </script>
 
 <template>
@@ -154,6 +170,19 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
                 <div class="appointment-confirmation">
                   <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ t(appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status) }}</span>
                   <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">{{ t('Confirm appointment') }}</button>
+                </div>
+              
+                <div class="cf-appointment-expansion">
+                  <button type="button" class="cf-appointment-expand-toggle"
+                    :aria-expanded="expandedAppointmentIds.has(appointment.id)"
+                    @click="toggleAppointmentDetails(appointment.id)">
+                    <span>Appointment details</span>
+                    <span class="cf-appointment-chevron" :class="{ expanded: expandedAppointmentIds.has(appointment.id) }" aria-hidden="true">›</span>
+                  </button>
+                  <div v-if="expandedAppointmentIds.has(appointment.id)" class="cf-appointment-extra">
+                    <p><strong>Office address:</strong> {{ clinicOfficeAddress }}</p>
+                    <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
+                  </div>
                 </div>
               </article>
             </div>
@@ -203,7 +232,20 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
                 <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ t(appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status) }}</span>
                 <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">{{ t('Confirm appointment') }}</button>
               </div>
-            </article>
+            
+                <div class="cf-appointment-expansion">
+                  <button type="button" class="cf-appointment-expand-toggle"
+                    :aria-expanded="expandedAppointmentIds.has(appointment.id)"
+                    @click="toggleAppointmentDetails(appointment.id)">
+                    <span>Appointment details</span>
+                    <span class="cf-appointment-chevron" :class="{ expanded: expandedAppointmentIds.has(appointment.id) }" aria-hidden="true">›</span>
+                  </button>
+                  <div v-if="expandedAppointmentIds.has(appointment.id)" class="cf-appointment-extra">
+                    <p><strong>Office address:</strong> {{ clinicOfficeAddress }}</p>
+                    <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
+                  </div>
+                </div>
+              </article>
           </div>
           <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Home') }}</button>
         </section>
@@ -305,7 +347,20 @@ function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; fee
                 <span>{{ formatDate(appointment.date) }}</span>
                 <span>{{ formatTime(appointment.time) }}</span>
               </div>
-            </article>
+            
+                <div class="cf-appointment-expansion">
+                  <button type="button" class="cf-appointment-expand-toggle"
+                    :aria-expanded="expandedAppointmentIds.has(appointment.id)"
+                    @click="toggleAppointmentDetails(appointment.id)">
+                    <span>Appointment details</span>
+                    <span class="cf-appointment-chevron" :class="{ expanded: expandedAppointmentIds.has(appointment.id) }" aria-hidden="true">›</span>
+                  </button>
+                  <div v-if="expandedAppointmentIds.has(appointment.id)" class="cf-appointment-extra">
+                    <p><strong>Office address:</strong> {{ clinicOfficeAddress }}</p>
+                    <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
+                  </div>
+                </div>
+              </article>
           </div>
           <p v-else class="empty-state">{{ t('No past appointments.') }}</p>
           <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Settings') }}</button>
@@ -581,4 +636,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .confirm-button{background:#2777b5;color:#fff;border:0;border-radius:7px;padding:8px 11px;font-size:12px;font-weight:700;cursor:pointer}
 .confirm-button:hover{background:#195e96}
 .history-action { margin-top: 18px; }
+
+/* Expandable patient appointment details */
+.cf-appointment-expansion{flex-basis:100%;width:100%;grid-column:1 / -1;margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0}
+.cf-appointment-expand-toggle{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;background:transparent;color:#1e5f96;padding:5px 0;font:inherit;font-weight:700;text-align:left;cursor:pointer}
+.cf-appointment-chevron{display:inline-block;font-size:24px;line-height:1;transform:rotate(90deg);transition:transform .2s ease}
+.cf-appointment-chevron.expanded{transform:rotate(-90deg)}
+.cf-appointment-extra{padding:5px 0 2px;color:#39495b;font-size:13px;line-height:1.55}
+.cf-appointment-extra p{margin:5px 0}
+
 </style>

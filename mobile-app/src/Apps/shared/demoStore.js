@@ -1,3 +1,4 @@
+import { assertBookableSlot } from './bookingAvailability.js'
 import { cloudConfigured, attachClinicStore } from '../../services/clinicSync.js'
 import { reactive, watch } from 'vue'
 
@@ -53,6 +54,7 @@ export const niceTime = (value) => {
   return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`
 }
 export function book(data, checkedIn = false) {
+  assertBookableSlot(data, clinic.appointments);
   const entry = {
     id: cloudConfigured ? Date.now() * 1000 + Math.floor(Math.random() * 1000) : nextId++, patient: data.patient.trim(), doctor: data.doctor,
     date: data.date, time: data.time, reason: data.reason || 'Consultation',
