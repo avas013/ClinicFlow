@@ -1,5 +1,6 @@
 
 <script setup>
+import ClinicFifteenMinuteSlots from '../shared/ClinicFifteenMinuteSlots.vue'
 import SlotPicker from '../shared/SlotPicker.vue'
 import { ref, computed, reactive, watch } from 'vue'
 import { clinic, staff, day, ordered, update, book } from '../shared/demoStore.js'
@@ -111,7 +112,7 @@ function rebook(a) {
           <p>{{ formatDate(newVisit.date) }}</p>
         </div>
         <label>{{ t('Time') }}
-          <SlotPicker v-model="newVisit.time" :date="newVisit.date" :doctor="doctor" :appointments="clinic.appointments" />
+          <ClinicFifteenMinuteSlots v-model="newVisit.time" :date="newVisit.date" :doctor="doctor" :patient-name="newVisit.patient" :appointments="clinic.appointments" />
         </label>
         <label>{{ t('Visit type') }} <select v-model="newVisit.reason"><option value="Consultation">{{ t('Consultation') }}</option><option value="Follow-up">{{ t('Follow-up') }}</option><option value="Check-up">{{ t('Check-up') }}</option></select></label>
         <p v-if="bookingError" class="staff-message clinic-calendar" role="alert">{{ t(bookingError) }}</p>
