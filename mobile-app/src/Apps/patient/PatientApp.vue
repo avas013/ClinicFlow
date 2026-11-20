@@ -1,7 +1,10 @@
 <script setup>
+import ClinicAppointmentActions from '../shared/ClinicAppointmentActions.vue'
+import ClinicVisitSurvey from './ClinicVisitSurvey.vue'
+import PatientBookingFlow from './PatientBookingFlow.vue'
 import { syncState, markRead } from '../../services/clinicSync.js'
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { clinic, book, confirmAppointment, day, ordered, staff, queue } from '../shared/demoStore.js'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { clinic, day, ordered, queue } from '../shared/demoStore.js'
 import { language, t, formatDate, formatTime, countLabel } from '../../language.js'
 import PatientCalendar from './PatientCalendar.vue'
 
@@ -44,43 +47,13 @@ const homeAppointments = computed(() => hasMoreAppointments.value
 const currentPage = ref('home')
 const pageHistory = ref([])
 const statusMessage = ref('')
-const feedbackSent = ref(false)
-const booking = reactive({ doctor: 'Dr. Smith', date: day(), time: '' })
-const feedback = reactive({ rating: '', message: '' })
+const bookingDate = ref('')
+const surveyAppointmentId = ref(null)
 const appointmentDay = ref(day())
 const dailyAppointments = computed(() => sortedAppointments.value.filter(a => a.date === appointmentDay.value))
-const availableTimes = computed(() => slotsFor(booking.date))
-
-function minutes(value) {
-  const [time, period] = value.trim().split(' ')
-  const [hour, minute] = time.split(':').map(Number)
-  return (hour % 12 + (period === 'PM' ? 12 : 0)) * 60 + minute
-}
-
-function slotsFor(date) {
-  const provider = staff.find(person => person.name === booking.doctor)
-  if (!provider || date < day()) return []
-  const [start, end] = provider.shift.split('–').map(minutes)
-  const now = Date.now()
-  const active = clinic.appointments.filter(a =>
-    a.date === date && (a.doctor === booking.doctor || a.patient.toLowerCase() === patientName.value.toLowerCase()) &&
-    !['Cancelled', 'No show'].includes(a.status)
-  )
-  const slots = []
-  for (let startMinute = start; startMinute + 30 <= end; startMinute += 30) {
-    const time = `${String(Math.floor(startMinute / 60)).padStart(2, '0')}:${String(startMinute % 60).padStart(2, '0')}`
-    const overlaps = active.some(a => {
-      const [hour, minute] = a.time.split(':').map(Number)
-      return Math.abs(startMinute - (hour * 60 + minute)) < 30
-    })
-    if (new Date(`${date}T${time}:00`).getTime() > now && !overlaps) slots.push(time)
-  }
-  return slots
-}
-
+// A date chosen in the appointment calendar is passed to the new booking form.
 function selectBookingDate(date) {
-  booking.date = date
-  booking.time = ''
+  bookingDate.value = date
   statusMessage.value = ''
 }
 const queueLabel = computed(() => {
@@ -97,6 +70,11 @@ function openPage(page) {
   currentPage.value = page
   statusMessage.value = ''
 }
+
+function openSurvey(appointmentId) {
+  surveyAppointmentId.value = Number(appointmentId)
+  openPage('feedback')
+}
 function goHome() {
   refreshTime()
   currentPage.value = 'home'
@@ -106,27 +84,6 @@ function goBack() {
   if (pageHistory.value.length) currentPage.value = pageHistory.value.pop()
   else statusMessage.value = 'You are already on the home screen.'
 }
-function saveBooking() {
-  if (!slotsFor(booking.date).includes(booking.time)) {
-    booking.time = ''
-    statusMessage.value = 'That time is no longer available. Choose another time.'
-    return
-  }
-  try {
-    book({ patient: patientName.value, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
-  } catch (error) {
-    statusMessage.value = error.message || 'That appointment slot is not available.'
-    return
-  }
-  booking.time = ''
-  goHome()
-  statusMessage.value = 'Appointment booked. Please confirm your attendance.'
-}
-function confirm(id) {
-  if (confirmAppointment(id, patientName.value)) statusMessage.value = 'Appointment confirmed.'
-}
-function submitFeedback() { feedbackSent.value = true; feedback.rating = ''; feedback.message = '' }
-
 const expandedAppointmentIds = ref(new Set())
 // Set VITE_CLINIC_OFFICE_ADDRESS in Vercel when you have a real address.
 const clinicOfficeAddress = import.meta.env.VITE_CLINIC_OFFICE_ADDRESS || 'Address will be provided by the clinic.'
@@ -167,10 +124,7 @@ function toggleAppointmentDetails(id) {
                   <strong>{{ formatTime(appointment.time) }}</strong>
                   <span>{{ formatDate(appointment.date) }}</span>
                 </div>
-                <div class="appointment-confirmation">
-                  <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ t(appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status) }}</span>
-                  <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">{{ t('Confirm appointment') }}</button>
-                </div>
+                <div class="appointment-status">{{ t(appointment.status) }}</div>
               
                 <div class="cf-appointment-expansion">
                   <button type="button" class="cf-appointment-expand-toggle"
@@ -184,6 +138,8 @@ function toggleAppointmentDetails(id) {
                     <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
                   </div>
                 </div>
+              
+                <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
               </article>
             </div>
             <p v-if="sortedAppointments.length === 0" class="empty-state">{{ t('No upcoming appointments.') }}</p>
@@ -203,7 +159,7 @@ function toggleAppointmentDetails(id) {
 
           <section class="quick-actions" :aria-label="t('Patient actions')">
             <button type="button" class="action-card" @click="openPage('booking')">{{ t('Booking') }}</button>
-            <button type="button" class="action-card" @click="openPage('feedback')">{{ t('Surveys / Feedback') }}</button>
+            <button type="button" class="action-card" @click="openPage('feedback')">{{ t('Visit surveys') }}</button>
           </section>
 
           <section class="queue-section" aria-labelledby="queue-heading">
@@ -228,10 +184,7 @@ function toggleAppointmentDetails(id) {
                 <strong>{{ formatTime(appointment.time) }}</strong>
                 <span>{{ formatDate(appointment.date) }}</span>
               </div>
-              <div class="appointment-confirmation">
-                <span class="confirmation-badge" :class="{ confirmed: appointment.confirmed }">{{ t(appointment.confirmed ? 'Confirmed' : appointment.status === 'Scheduled' ? 'Awaiting confirmation' : appointment.status) }}</span>
-                <button v-if="appointment.status === 'Scheduled' && !appointment.confirmed" class="confirm-button" type="button" @click="confirm(appointment.id)">{{ t('Confirm appointment') }}</button>
-              </div>
+                <div class="appointment-status">{{ t(appointment.status) }}</div>
             
                 <div class="cf-appointment-expansion">
                   <button type="button" class="cf-appointment-expand-toggle"
@@ -245,6 +198,8 @@ function toggleAppointmentDetails(id) {
                     <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
                   </div>
                 </div>
+              
+                <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
               </article>
           </div>
           <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Home') }}</button>
@@ -257,51 +212,21 @@ function toggleAppointmentDetails(id) {
           <p v-if="!dailyAppointments.length" class="empty-state">No upcoming appointments on this date.</p>
           <div v-for="appointment in dailyAppointments" :key="appointment.id" class="detail-card">
             <strong>{{ formatTime(appointment.time) }} · {{ appointment.doctor }}</strong>
-            <p>{{ appointment.reason }} · {{ appointment.confirmed ? 'Confirmed' : appointment.status }}</p>
+            <p>{{ appointment.reason }} · {{ appointment.status }}</p>
           </div>
           <button type="button" class="primary-button" @click="selectBookingDate(appointmentDay); openPage('booking')">View booking availability</button>
         </section>
 
         <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
-          <h1 id="booking-heading" class="section-heading">{{ t('Booking') }}</h1>
-          <p class="screen-description">{{ t('Choose a date and time to book an appointment.') }}</p>
-          <form class="form-stack" @submit.prevent="saveBooking">
-            <label for="doctor">{{ t('Doctor') }}</label>
-            <select id="doctor" v-model="booking.doctor" @change="selectBookingDate(booking.date)" required>
-              <option v-for="person in staff" :key="person.name">{{ person.name }}</option>
-            </select>
-            <PatientCalendar :selected="booking.date" :appointments="sortedAppointments" :available="slotsFor" @select="selectBookingDate" />
-            <p>{{ formatDate(booking.date) }}</p>
-            <label for="time">{{ t('Time') }}</label>
-            <select id="time" v-model="booking.time" :disabled="!availableTimes.length" required>
-              <option value="" disabled>{{ availableTimes.length ? 'Choose a time' : 'No times available' }}</option>
-              <option v-for="time in availableTimes" :key="time" :value="time">{{ formatTime(time) }}</option>
-            </select>
-            <p v-if="statusMessage" class="status-message" role="alert">{{ t(statusMessage) }}</p>
-            <button class="primary-button" type="submit" :disabled="!booking.time">{{ t('Book appointment') }}</button>
-          </form>
+          <h1 class="section-heading">Book an appointment</h1>
+          <PatientBookingFlow :initial-date="bookingDate" @booked="goHome" />
         </section>
 
         <!-- FEEDBACK SCREEN -->
         <section v-else-if="currentPage === 'feedback'" class="detail-screen" aria-labelledby="feedback-heading">
-          <h1 id="feedback-heading" class="section-heading">{{ t('Surveys / Feedback') }}</h1>
-          <p class="screen-description">{{ t('Tell us about your experience.') }}</p>
-          <p v-if="feedbackSent" class="status-message" role="status">{{ t('Thank you for your feedback!') }}</p>
-          <form class="form-stack" @submit.prevent="submitFeedback">
-            <label for="rating">{{ t('Rating') }}</label>
-            <select id="rating" v-model="feedback.rating" required>
-              <option disabled value="">{{ t('Select a rating') }}</option>
-              <option value="5">5 — {{ t('Excellent') }}</option>
-              <option value="4">4 — {{ t('Good') }}</option>
-              <option value="3">3 — {{ t('Average') }}</option>
-              <option value="2">2 — {{ t('Poor') }}</option>
-              <option value="1">1 — {{ t('Very poor') }}</option>
-            </select>
-            <label for="comments">{{ t('Comments (optional)') }}</label>
-            <textarea id="comments" v-model="feedback.message" rows="5" :placeholder="t('Share your feedback...')"></textarea>
-            <button class="primary-button" type="submit">{{ t('Submit feedback') }}</button>
-          </form>
+          <h1 id="feedback-heading" class="section-heading">Rate your recent visit</h1>
+          <ClinicVisitSurvey :appointments="patientAppointments" :initial-appointment-id="surveyAppointmentId" />
         </section>
 
         <!-- PROFILE AND NOTIFICATIONS -->
@@ -317,7 +242,10 @@ function toggleAppointmentDetails(id) {
             <strong>{{ note.read_at ? 'Appointment update' : 'New appointment update' }}</strong>
             <p>{{ note.message }}</p>
             <small>{{ new Date(note.created_at).toLocaleString() }}</small>
-            <div><button v-if="!note.read_at" class="primary-button" type="button" @click="markRead(note.id)">Mark as read</button></div>
+            <div class="cf-survey-notification-actions">
+              <button v-if="note.event_type === 'visit_survey' && note.appointment_id" class="primary-button" type="button" @click="openSurvey(note.appointment_id)">Rate this visit</button>
+              <button v-if="!note.read_at" class="primary-button" type="button" @click="markRead(note.id)">Mark as read</button>
+            </div>
           </article>
           </section>
 
@@ -360,6 +288,9 @@ function toggleAppointmentDetails(id) {
                     <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
                   </div>
                 </div>
+              
+                <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
+                <button v-if="appointment.status === 'Completed'" type="button" class="cf-history-survey-link" @click="openSurvey(appointment.id)">Rate this visit</button>
               </article>
           </div>
           <p v-else class="empty-state">{{ t('No past appointments.') }}</p>
@@ -373,7 +304,7 @@ function toggleAppointmentDetails(id) {
             <button type="button" @click="goHome">{{ t('Home') }} <span aria-hidden="true">›</span></button>
             <button type="button" @click="openPage('appointments')">{{ t('All Appointments') }} <span aria-hidden="true">›</span></button>
             <button type="button" @click="openPage('booking')">{{ t('Booking') }} <span aria-hidden="true">›</span></button>
-            <button type="button" @click="openPage('feedback')">{{ t('Surveys / Feedback') }} <span aria-hidden="true">›</span></button>
+            <button type="button" @click="openPage('feedback')">{{ t('Visit surveys') }} <span aria-hidden="true">›</span></button>
             <button type="button" @click="openPage('profile')">{{ t('Profile') }} <span aria-hidden="true">›</span></button>
             <button type="button" @click="openPage('settings')">{{ t('Settings') }} <span aria-hidden="true">›</span></button>
             <button type="button" @click="openPage('notifications')">{{ t('Notifications') }} <span aria-hidden="true">›</span></button>

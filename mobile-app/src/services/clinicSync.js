@@ -190,7 +190,7 @@ export async function refreshAll(force = false, manual = false) {
     try {
       const [{ data: rows, error }, { data: notes, error: notesError }] = await Promise.all([
         supabase.from('appointments').select('id,patient_id,patient,doctor,date,time,reason,status,confirmed,queue_position').order('date', { ascending: true }).order('time', { ascending: true }),
-        supabase.from('appointment_notifications').select('id,appointment_id,message,created_at,read_at').order('created_at', { ascending: false }).limit(40),
+        supabase.from('appointment_notifications').select('id,appointment_id,message,event_type,created_at,read_at').order('created_at', { ascending: false }).limit(40),
       ])
       if (error) throw error
       if (notesError) throw notesError
@@ -216,6 +216,12 @@ export async function refreshAll(force = false, manual = false) {
     } finally { syncState.refreshing = false }
   })()
   try { return await refreshInFlight } finally { refreshInFlight = null }
+}
+
+
+// Patient cancellation was deliberately removed. Only clinic staff may cancel.
+export async function cancelPatientAppointment() {
+  throw new Error('To cancel or reschedule an appointment, please call the clinic.')
 }
 
 function notifyLocally(note) {
@@ -271,12 +277,7 @@ async function performSaveChanges() {
         })
         if (error) throw error
       } else if (syncState.profile?.role === 'patient') {
-        const before = JSON.parse(serverSnapshot.get(appointment.id))
-        const isConfirmation = !before.confirmed && payload.confirmed &&
-          Object.keys(before).every(k => k === 'confirmed' || before[k] === payload[k])
-        if (!isConfirmation) throw new Error('Patients may only confirm their scheduled appointments.')
-        const { error } = await supabase.rpc('confirm_my_appointment', { target_appointment_id: appointment.id })
-        if (error) throw error
+        throw new Error('Patients cannot change appointment status. Please contact the clinic.')
       } else {
         const { error } = await supabase.from('appointments').update(payload).eq('id', appointment.id)
         if (error) throw error
@@ -325,4 +326,75 @@ export async function loadBusySlots(date, doctor) {
   });
   if (error) throw error;
   return (data || []).map(row => row.slot_time);
+}
+
+/** Save directly, so the UI shows success only after Supabase accepts the slot. */
+/** Backwards-compatible entry point: ignore any clinician passed by older UI. */
+export async function clinicflowBookPatient(payload) {
+  return clinicflowBookPatientAuto({ date: payload.date, time: payload.time, symptom: payload.symptom })
+}
+
+/** Patient cancellation is disabled by ClinicFlow policy and Supabase permissions. */
+export async function clinicflowCancelPatient() {
+  throw new Error('To cancel or reschedule an appointment, please call the clinic.')
+}
+
+/** Available times for a symptom category; clinician identities remain hidden. */
+export async function clinicflowPatientAvailableTimes(date, symptom) {
+  if (!cloudConfigured || !supabase) return []
+  const { data: auth, error: authError } = await supabase.auth.getUser()
+  if (authError || !auth?.user) throw new Error('Please sign in before checking available times.')
+  const { data, error } = await supabase.rpc('clinicflow_patient_available_times', {
+    p_date: date, p_symptom: symptom,
+  })
+  if (error) throw new Error(error.message || 'Could not load appointment availability.')
+  return (data || []).map(row => String(row.slot_time).slice(0, 5))
+}
+
+/** The database automatically selects the nurse/doctor and enforces unique slots. */
+export async function clinicflowBookPatientAuto({ date, time, symptom }) {
+  if (!cloudConfigured || !supabase) throw new Error('Cloud booking is not configured.')
+  const { data: auth, error: authError } = await supabase.auth.getUser()
+  if (authError || !auth?.user) throw new Error('Please sign in before booking.')
+  const { data, error } = await supabase.rpc('clinicflow_book_my_appointment_auto', {
+    p_date: date, p_time: time, p_symptom: symptom,
+  })
+  if (error) {
+    if (error.code === '23505') throw new Error('That appointment was just taken. Choose another time or date.')
+    throw new Error(error.message || 'Booking failed. Please try another time.')
+  }
+  await refreshAll(true)
+  return data
+}
+
+
+/** The patient can review each completed appointment once. The server enforces ownership. */
+export async function listMyVisitSurveys() {
+  if (!cloudConfigured || !supabase) throw new Error('ClinicFlow cloud connection is required for visit surveys.')
+  if (syncState.profile?.role !== 'patient') throw new Error('Only patients may submit visit surveys.')
+  const { data, error } = await supabase.from('clinicflow_visit_surveys')
+    .select('appointment_id,submitted_at').order('submitted_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function submitMyVisitSurvey(payload) {
+  if (!cloudConfigured || !supabase) throw new Error('ClinicFlow cloud connection is required for visit surveys.')
+  const { data: auth, error: authError } = await supabase.auth.getUser()
+  if (authError || !auth?.user || syncState.profile?.role !== 'patient') throw new Error('Sign in as a patient to review a visit.')
+  const ratings = ['overall','wait_time','concerns','comfort_safety','staff_care']
+  if (!ratings.every(k => Number.isInteger(payload[k]) && payload[k] >= 1 && payload[k] <= 5)) {
+    throw new Error('Please provide all five ratings from 1 to 5 stars.')
+  }
+  const { error } = await supabase.from('clinicflow_visit_surveys').insert({
+    appointment_id: payload.appointment_id,
+    patient_id: auth.user.id,
+    overall: payload.overall,
+    wait_time: payload.wait_time,
+    concerns: payload.concerns,
+    comfort_safety: payload.comfort_safety,
+    staff_care: payload.staff_care,
+    additional_feedback: String(payload.additional_feedback || '').trim().slice(0, 3000),
+  })
+  if (error) throw error
 }
