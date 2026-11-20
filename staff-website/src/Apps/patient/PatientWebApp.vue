@@ -107,12 +107,12 @@ function toggleAppointmentDetails(id) {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" /><path d="M10 21h4" /></svg>
         </button>
       </header>
-      <nav class="patient-web-navigation" aria-label="Patient website navigation">
-        <button type="button" :class="{ active: currentPage === 'home' }" @click="goHome">Home</button>
-        <button type="button" :class="{ active: currentPage === 'appointments' }" @click="openPage('appointments')">Appointments</button>
-        <button type="button" :class="{ active: currentPage === 'booking' }" @click="openPage('booking')">Book appointment</button>
-        <button type="button" :class="{ active: currentPage === 'feedback' }" @click="openPage('feedback')">Feedback</button>
-        <button type="button" :class="{ active: currentPage === 'profile' }" @click="openPage('profile')">Profile</button>
+      <nav class="patient-web-navigation" :aria-label="t(&quot;Patient website navigation&quot;)">
+        <button type="button" :class="{ active: currentPage === 'home' }" @click="goHome">{{ t("Home") }}</button>
+        <button type="button" :class="{ active: currentPage === 'appointments' }" @click="openPage('appointments')">{{ t("Appointments") }}</button>
+        <button type="button" :class="{ active: currentPage === 'booking' }" @click="openPage('booking')">{{ t("Book appointment") }}</button>
+        <button type="button" :class="{ active: currentPage === 'feedback' }" @click="openPage('feedback')">{{ t("Feedback") }}</button>
+        <button type="button" :class="{ active: currentPage === 'profile' }" @click="openPage('profile')">{{ t("Profile") }}</button>
       </nav>
 
 
@@ -137,12 +137,12 @@ function toggleAppointmentDetails(id) {
                   <button type="button" class="cf-appointment-expand-toggle"
                     :aria-expanded="expandedAppointmentIds.has(appointment.id)"
                     @click="toggleAppointmentDetails(appointment.id)">
-                    <span>Appointment details</span>
+                    <span>{{ t("Appointment details") }}</span>
                     <span class="cf-appointment-chevron" :class="{ expanded: expandedAppointmentIds.has(appointment.id) }" aria-hidden="true">›</span>
                   </button>
                   <div v-if="expandedAppointmentIds.has(appointment.id)" class="cf-appointment-extra">
-                    <p><strong>Office address:</strong> {{ clinicOfficeAddress }}</p>
-                    <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
+                    <p><strong>{{ t("Office address:") }}</strong> {{ t(clinicOfficeAddress) }}</p>
+                    <p><strong>{{ t("Bring:") }}</strong> {{ t("Your health card, a current medication list, and any relevant documents.") }}</p>
                   </div>
                 </div>
               
@@ -150,7 +150,7 @@ function toggleAppointmentDetails(id) {
               </article>
             </div>
             <p v-if="sortedAppointments.length === 0" class="empty-state">{{ t('No upcoming appointments.') }}</p>
-            <button type="button" class="view-more-button" @click="openPage('calendar')">Appointment calendar</button>
+            <button type="button" class="view-more-button" @click="openPage('calendar')">{{ t("Appointment calendar") }}</button>
             <button
               v-if="hasMoreAppointments"
               type="button"
@@ -197,12 +197,12 @@ function toggleAppointmentDetails(id) {
                   <button type="button" class="cf-appointment-expand-toggle"
                     :aria-expanded="expandedAppointmentIds.has(appointment.id)"
                     @click="toggleAppointmentDetails(appointment.id)">
-                    <span>Appointment details</span>
+                    <span>{{ t("Appointment details") }}</span>
                     <span class="cf-appointment-chevron" :class="{ expanded: expandedAppointmentIds.has(appointment.id) }" aria-hidden="true">›</span>
                   </button>
                   <div v-if="expandedAppointmentIds.has(appointment.id)" class="cf-appointment-extra">
-                    <p><strong>Office address:</strong> {{ clinicOfficeAddress }}</p>
-                    <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
+                    <p><strong>{{ t("Office address:") }}</strong> {{ t(clinicOfficeAddress) }}</p>
+                    <p><strong>{{ t("Bring:") }}</strong> {{ t("Your health card, a current medication list, and any relevant documents.") }}</p>
                   </div>
                 </div>
               
@@ -213,26 +213,26 @@ function toggleAppointmentDetails(id) {
         </section>
 
         <section v-else-if="currentPage === 'calendar'" class="detail-screen" aria-labelledby="calendar-heading">
-          <h1 id="calendar-heading" class="section-heading">Appointment calendar</h1>
+          <h1 id="calendar-heading" class="section-heading">{{ t("Appointment calendar") }}</h1>
           <PatientCalendar :selected="appointmentDay" :appointments="sortedAppointments" @select="appointmentDay = $event" />
           <h2 class="section-heading">{{ formatDate(appointmentDay) }}</h2>
-          <p v-if="!dailyAppointments.length" class="empty-state">No upcoming appointments on this date.</p>
+          <p v-if="!dailyAppointments.length" class="empty-state">{{ t("No upcoming appointments on this date.") }}</p>
           <div v-for="appointment in dailyAppointments" :key="appointment.id" class="detail-card">
             <strong>{{ formatTime(appointment.time) }} · {{ appointment.doctor }}</strong>
             <p>{{ appointment.reason }} · {{ appointment.status }}</p>
           </div>
-          <button type="button" class="primary-button" @click="selectBookingDate(appointmentDay); openPage('booking')">View booking availability</button>
+          <button type="button" class="primary-button" @click="selectBookingDate(appointmentDay); openPage('booking')">{{ t("View booking availability") }}</button>
         </section>
 
         <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
-          <h1 class="section-heading">Book an appointment</h1>
+          <h1 class="section-heading">{{ t('Book appointment') }}</h1>
           <PatientBookingFlow :initial-date="bookingDate" @booked="goHome" />
         </section>
 
         <!-- FEEDBACK SCREEN -->
         <section v-else-if="currentPage === 'feedback'" class="detail-screen" aria-labelledby="feedback-heading">
-          <h1 id="feedback-heading" class="section-heading">Rate your recent visit</h1>
+          <h1 id="feedback-heading" class="section-heading">{{ language === 'fr' ? 'Évaluez votre dernière visite' : 'Rate your recent visit' }}</h1>
           <ClinicVisitSurvey :appointments="patientAppointments" :initial-appointment-id="surveyAppointmentId" />
         </section>
 
@@ -243,15 +243,15 @@ function toggleAppointmentDetails(id) {
         </section>
 
         <section v-else-if="currentPage === 'notifications'" class="detail-screen" aria-labelledby="notifications-heading">
-          <h1 id="notifications-heading" class="section-heading">Notifications</h1>
-          <p v-if="!syncState.notifications.length" class="screen-description">No appointment notifications yet.</p>
+          <h1 id="notifications-heading" class="section-heading">{{ t("Notifications") }}</h1>
+          <p v-if="!syncState.notifications.length" class="screen-description">{{ t("No appointment notifications yet.") }}</p>
           <article v-for="note in syncState.notifications" :key="note.id" class="detail-card">
             <strong>{{ note.read_at ? 'Appointment update' : 'New appointment update' }}</strong>
             <p>{{ note.message }}</p>
-            <small>{{ new Date(note.created_at).toLocaleString() }}</small>
+            <small>{{ new Date(note.created_at).toLocaleString(language === 'fr' ? 'fr-CA' : 'en-CA') }}</small>
             <div class="cf-survey-notification-actions">
-              <button v-if="note.event_type === 'visit_survey' && note.appointment_id" class="primary-button" type="button" @click="openSurvey(note.appointment_id)">Rate this visit</button>
-              <button v-if="!note.read_at" class="primary-button" type="button" @click="markRead(note.id)">Mark as read</button>
+              <button v-if="note.event_type === 'visit_survey' && note.appointment_id" class="primary-button" type="button" @click="openSurvey(note.appointment_id)">{{ language === 'fr' ? 'Évaluer cette visite' : 'Rate this visit' }}</button>
+              <button v-if="!note.read_at" class="primary-button" type="button" @click="markRead(note.id)">{{ t("Mark as read") }}</button>
             </div>
           </article>
           </section>
@@ -287,12 +287,12 @@ function toggleAppointmentDetails(id) {
                   <button type="button" class="cf-appointment-expand-toggle"
                     :aria-expanded="expandedAppointmentIds.has(appointment.id)"
                     @click="toggleAppointmentDetails(appointment.id)">
-                    <span>Appointment details</span>
+                    <span>{{ t("Appointment details") }}</span>
                     <span class="cf-appointment-chevron" :class="{ expanded: expandedAppointmentIds.has(appointment.id) }" aria-hidden="true">›</span>
                   </button>
                   <div v-if="expandedAppointmentIds.has(appointment.id)" class="cf-appointment-extra">
-                    <p><strong>Office address:</strong> {{ clinicOfficeAddress }}</p>
-                    <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
+                    <p><strong>{{ t("Office address:") }}</strong> {{ t(clinicOfficeAddress) }}</p>
+                    <p><strong>{{ t("Bring:") }}</strong> {{ t("Your health card, a current medication list, and any relevant documents.") }}</p>
                   </div>
                 </div>
               
