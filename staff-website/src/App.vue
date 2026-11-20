@@ -1,4 +1,5 @@
 <script setup>
+import ClinicLanding from './ClinicLanding.vue'
 import './styles/doctor-web.css'
 import DoctorNurseApp from './Apps/doctor-nurse/DoctorNurseApp.vue'
 import SyncToolbar from './services/SyncToolbar.vue'
@@ -48,9 +49,10 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 const currentUser = ref(null)
+const loading = ref(false)
 
 // Login
-async function signIn() {
+async function performSignIn() {
   error.value = ''
 
   // Supabase authentication
@@ -116,10 +118,21 @@ function signOut() {
     void cloudLogout()
   }
 
+
   currentUser.value = null
   email.value = ''
   password.value = ''
   error.value = ''
+}
+
+async function signIn() {
+  if (loading.value) return
+  loading.value = true
+  try {
+    await performSignIn()
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -127,15 +140,16 @@ function signOut() {
   <SyncToolbar v-if="currentUser" />
 
   <div class="staff-shell">
-
-    <!-- LOGIN SCREEN -->
-    <main v-if="!currentUser" class="login-layout">
+    <ClinicLanding v-if="!currentUser">
+      <template #signin>
+        <div class="login-layout">
       <section class="login-card">
 
         <div class="logo">+</div>
 
         <h1>ClinicFlow</h1>
         <p>{{ t('ClinicFlow Website') }}</p>
+        <p>Patients, doctors, nurses, front desk staff, and administrators can sign in here.</p>
 
         <label class="language-picker">
           <span>{{ t('Language') }}</span>
@@ -176,13 +190,16 @@ function signOut() {
             {{ t(error) }}
           </p>
 
-          <button class="login-button" type="submit">
-            {{ t('Sign in') }}
+          <button class="login-button" type="submit" :disabled="loading">
+            {{ loading ? 'Signing in…' : t('Sign in') }}
           </button>
 
         </form>
       </section>
-    </main>
+    
+        </div>
+      </template>
+    </ClinicLanding>
 
     <!-- LOGGED-IN WEBSITE -->
     <template v-else>
@@ -381,4 +398,21 @@ input {
     padding: 12px 16px;
   }
 }
+</style>
+
+<style scoped>
+/* Give the public landing page the full viewport while keeping the app layout. */
+.mobile-shell:has(.clinic-landing) { max-width: none; }
+.clinic-landing :deep(.login-layout),
+.clinic-landing :deep(.login-screen) { min-height: 0; padding: 0; display: block; }
+.clinic-landing :deep(.login-card) { max-width: none; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.clinic-landing :deep(.login-card .logo) { display: none; }
+.clinic-landing :deep(.login-card h1) { font-size: 1.4rem; margin: 0 0 8px; }
+.clinic-landing :deep(.login-card label) { font-size: .95rem; }
+.clinic-landing :deep(.login-card input),
+.clinic-landing :deep(.login-card select),
+.clinic-landing :deep(.login-card button) { font-size: 1rem; min-height: 48px; }
+.clinic-landing :deep(.login-card p) { color: #526779; }
+.clinic-landing :deep(.login-card .error) { color: #a51e16; }
+.clinic-landing :deep(.login-card :focus-visible) { outline: 3px solid #174e7c; outline-offset: 3px; }
 </style>
