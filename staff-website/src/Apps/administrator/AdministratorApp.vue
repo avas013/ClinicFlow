@@ -5,6 +5,7 @@ import {
   ordered, queue, moveQueue
 } from '../shared/demoStore.js'
 import { t, formatDate, formatTime, formatShift, countLabel } from '../../language.js'
+import { CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
 
 const tab = ref('overview')
 const period = ref('all')
@@ -47,7 +48,7 @@ function downloadReport() {
         <div>
           <p class="admin-overline">{{ t('Administrator Portal') }}</p>
           <h1>{{ t('Clinic overview') }}</h1>
-          <p class="admin-muted">{{ t('Operational insights') }}</p>
+          <p class="admin-muted">{{ t('Operational insights') }} · Clinic hours: {{ CLINIC_DAYS }} {{ CLINIC_HOURS }}</p>
         </div>
         <div class="admin-controls">
           <label>{{ t('Reporting period') }}

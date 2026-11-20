@@ -7,6 +7,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { clinic, day, ordered, queue } from '../shared/demoStore.js'
 import { language, t, formatDate, formatTime, countLabel } from '../../language.js'
 import PatientCalendar from './PatientCalendar.vue'
+import { CLINIC_ADDRESS, CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
 
 const patientName = computed(() => syncState.profile?.full_name || 'Jordan Taylor')
 const queuePosition = computed(() => queue().findIndex(a => a.patient === patientName.value) + 1)
@@ -85,8 +86,7 @@ function goBack() {
   else statusMessage.value = 'You are already on the home screen.'
 }
 const expandedAppointmentIds = ref(new Set())
-// Set VITE_CLINIC_OFFICE_ADDRESS in Vercel when you have a real address.
-const clinicOfficeAddress = import.meta.env.VITE_CLINIC_OFFICE_ADDRESS || 'Address will be provided by the clinic.'
+const clinicOfficeAddress = CLINIC_ADDRESS
 function toggleAppointmentDetails(id) {
   const next = new Set(expandedAppointmentIds.value)
   if (next.has(id)) next.delete(id)
@@ -207,6 +207,7 @@ function toggleAppointmentDetails(id) {
 
         <section v-else-if="currentPage === 'calendar'" class="detail-screen" aria-labelledby="calendar-heading">
           <h1 id="calendar-heading" class="section-heading">Appointment calendar</h1>
+          <p class="calendar-clinic-hours">Clinic hours: {{ CLINIC_DAYS }} · {{ CLINIC_HOURS }} (closed weekends)</p>
           <PatientCalendar :selected="appointmentDay" :appointments="sortedAppointments" @select="appointmentDay = $event" />
           <h2 class="section-heading">{{ formatDate(appointmentDay) }}</h2>
           <p v-if="!dailyAppointments.length" class="empty-state">No upcoming appointments on this date.</p>
@@ -328,8 +329,9 @@ function toggleAppointmentDetails(id) {
 </template>
 
 <style scoped>
-.cf-bell-count{color:#f47730;font-size:12px;position:relative;line-height:1;}
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.cf-bell-count{color:#f47730;font-size:12px;position:relative;line-height:1;}
+.calendar-clinic-hours { font-size: 13px; color: #52677c; margin: 4px 0 12px; }
 
 :global(*) { box-sizing: border-box; }
 :global(body) { margin: 0; }

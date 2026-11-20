@@ -14,12 +14,13 @@ import {
   slotOccupied,
   patientSlotOccupied,
 } from '../shared/clinicflowBookingRules.js'
+import { isClinicWeekday, CLINIC_DAYS, CLINIC_HOURS, CLINIC_PHONE, CLINIC_PHONE_LINK, CLINIC_OPEN_HOUR, CLINIC_CLOSE_HOUR } from '../../config/clinicDetails.js'
 
 // Matches the active Supabase clinician roster. Names are not selectable by patients.
 const PROVIDERS = [
-  { name: 'Dr. Smith', kind: 'doctor', start: '08:00', end: '16:00' },
-  { name: 'Nurse Patel', kind: 'nurse', start: '08:30', end: '15:30' },
-  { name: 'Nurse Chen', kind: 'nurse', start: '08:30', end: '15:30' },
+  { name: 'Dr. Smith', kind: 'doctor', start: '09:00', end: '17:00' },
+  { name: 'Nurse Patel', kind: 'nurse', start: '09:00', end: '17:00' },
+  { name: 'Nurse Chen', kind: 'nurse', start: '09:00', end: '17:00' },
 ]
 
 const props = defineProps({ initialDate: { type: String, default: '' } })
@@ -52,7 +53,7 @@ const calendarDays = computed(() => {
     const dayNumber = index - leadingDays + 1
     if (dayNumber < 1 || dayNumber > daysInMonth) return null
     const date = dateString(new Date(viewingYear.value, viewingMonth.value, dayNumber))
-    return { day: dayNumber, date, past: date < today.value }
+    return { day: dayNumber, date, past: date < today.value, closed: !isClinicWeekday(date) }
   })
 })
 const timeMinutes = value => {
@@ -69,7 +70,7 @@ const selectedDateLabel = computed(() => form.date
   : '')
 
 function setDate(date) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today.value) return
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today.value || !isClinicWeekday(date)) return
   form.date = date
   form.time = ''
   dropdownOpen.value = true
@@ -81,7 +82,7 @@ function setDate(date) {
 async function selectDate(date) {
   setDate(date)
   await nextTick()
-  timeToggle.value?.focus()
+  if (form.date === date) timeToggle.value?.focus()
 }
 watch(() => props.initialDate, date => {
   if (date) setDate(date)
@@ -100,9 +101,9 @@ function providersAt(time) {
     && !slotOccupied(clinic.appointments, provider.name, form.date, time))
 }
 function localAvailableTimes() {
-  if (!form.symptom || !form.date) return []
+  if (!form.symptom || !form.date || !isClinicWeekday(form.date)) return []
   const times = []
-  for (let minute = 8 * 60; minute < 16 * 60; minute += 15) {
+  for (let minute = CLINIC_OPEN_HOUR * 60; minute < CLINIC_CLOSE_HOUR * 60; minute += 15) {
     const time = hhmm(minute)
     if (new Date(`${form.date}T${time}:00`) <= new Date()) continue
     if (patientSlotOccupied(clinic.appointments, patientName.value, form.date, time)) continue
@@ -112,7 +113,7 @@ function localAvailableTimes() {
 }
 const availableTimes = computed(() => cloudConfigured ? remoteChoices.value : localAvailableTimes())
 const displayedTimes = computed(() => {
-  if (!form.symptom || !form.date) return []
+  if (!form.symptom || !form.date || !isClinicWeekday(form.date)) return []
   const pool = PROVIDERS.filter(provider => provider.kind === appointmentType.value)
   const start = Math.min(...pool.map(provider => timeMinutes(provider.start)))
   const end = Math.max(...pool.map(provider => timeMinutes(provider.end)))
@@ -192,8 +193,6 @@ async function submit() {
   }
 }
 
-const clinicPhone = import.meta.env.VITE_CLINIC_PHONE || ''
-const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
 </script>
 
 <template>
@@ -211,6 +210,7 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
       If symptoms are severe, sudden, or an emergency, call 911 or seek emergency care instead.</p>
 
     <p class="cf-field-label">Choose an appointment date</p>
+    <p class="cf-note">Clinic hours: {{ CLINIC_DAYS }}, {{ CLINIC_HOURS }}. Closed Saturday and Sunday. Last appointment begins at 4:45 PM.</p>
     <div class="cf-calendar" aria-label="Appointment date calendar">
       <div class="cf-month">
         <button type="button" aria-label="Previous month" :disabled="!canGoBackMonth" @click="changeMonth(-1)">‹</button>
@@ -221,9 +221,9 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
         <span v-for="weekday in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="weekday" class="cf-weekday">{{ weekday }}</span>
         <template v-for="(cell, index) in calendarDays" :key="index">
           <span v-if="!cell" class="cf-blank" aria-hidden="true"></span>
-          <button v-else type="button" :disabled="cell.past" :aria-pressed="form.date === cell.date"
-            :class="{ selected: form.date === cell.date, today: cell.date === today }"
-            :aria-label="cell.date" @click="selectDate(cell.date)">{{ cell.day }}</button>
+          <button v-else type="button" :disabled="cell.past || cell.closed" :aria-pressed="form.date === cell.date"
+            :class="{ selected: form.date === cell.date, today: cell.date === today, closed: cell.closed }"
+            :aria-label="cell.date + (cell.closed ? ', clinic closed' : '')" @click="selectDate(cell.date)">{{ cell.day }}</button>
         </template>
       </div>
     </div>
@@ -255,8 +255,8 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
     </div>
     <p v-if="error" class="cf-error" role="alert">{{ error }}</p>
     <p class="cf-call-note">To cancel or reschedule an appointment, please
-      <a v-if="phoneLink" :href="`tel:${phoneLink}`">call the clinic at {{ clinicPhone }}</a>
-      <span v-else>call the clinic</span>.
+      <a v-if="CLINIC_PHONE_LINK" :href="CLINIC_PHONE_LINK">call the clinic at {{ CLINIC_PHONE }}</a>
+      <span v-else>call the clinic at {{ CLINIC_PHONE }}</span>.
     </p>
     <button class="cf-book-button" type="submit"
       :disabled="booking || availabilityLoading || !form.symptom || !form.date || !form.time">
@@ -277,6 +277,7 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
 .cf-weekday{font-weight:700;color:#648099;font-size:11px;padding:7px 1px}
 .cf-grid button{min-width:0;aspect-ratio:1;border:0;border-radius:8px;background:#f6f9fc;color:#315271;font:inherit;font-size:13px;cursor:pointer}
 .cf-grid button:hover:not(:disabled){background:#dbeaf9}.cf-grid button:disabled{opacity:.26;cursor:default}
+.cf-grid button.closed{background:#e7ebef;color:#7c8793}
 .cf-grid button.selected{background:#2676b6;color:white;font-weight:800}
 .cf-grid button.today:not(.selected){outline:1px solid #2676b6}
 .cf-route{padding:12px;background:#eaf4fc;color:#155680;border-radius:9px;font-size:13px}
