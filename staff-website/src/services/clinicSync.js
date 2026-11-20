@@ -162,93 +162,9 @@ function scheduleRefresh() {
 }
 
 
-export async function cancelPatientAppointment(id) {
-  if (!cloudConfigured) {
-    const appointment = store?.appointments.find(
-      a => String(a.id) === String(id)
-    )
-
-    if (!appointment || appointment.status !== 'Scheduled') {
-      throw new Error('This appointment cannot be cancelled.')
-    }
-
-    appointment.status = 'Cancelled'
-    appointment.confirmed = false
-    return
-  }
-
-  const { data: authData, error: authError } =
-    await supabase.auth.getUser()
-
-  if (authError || !authData.user) {
-    throw new Error('Please sign in first.')
-  }
-
-  const { error } = await supabase.rpc(
-    'cancel_my_appointment',
-    { target_appointment_id: id }
-  )
-
-  if (error) throw new Error(error.message)
-
-  await refreshAll(true)
-}
-
-export async function refreshAll(force = false, manual = false) {
-  if (!cloudConfigured) {
-    // This is a local demo, not shared storage.
-    syncState.toast = 'Local demo only. Set up Supabase to synchronize devices.'
-    return
-  }
-  if (!currentUserId) {
-    syncState.error = 'Sign in to synchronize appointments.'
-    return
-  }
-  // Do not overwrite an unsaved local booking if Refresh is clicked immediately.
-  if (!force && debounce && syncState.ready) {
-    clearTimeout(debounce)
-    debounce = null
-    await saveChanges()
-  }
-  // Realtime/poll/manual requests must not be dropped during an appointment save.
-  if (!force && savePromise) await savePromise
-  if (refreshInFlight) {
-    await refreshInFlight
-    if (!manual) return
-    // A manual click must make a NEW request, not reuse an older in-flight response.
-  }
-  const generation = activeGeneration
-  refreshInFlight = (async () => {
-    syncState.refreshing = true
-    try {
-      const [{ data: rows, error }, { data: notes, error: notesError }] = await Promise.all([
-        supabase.from('appointments').select('id,patient_id,patient,doctor,date,time,reason,status,confirmed,queue_position').order('date', { ascending: true }).order('time', { ascending: true }),
-        supabase.from('appointment_notifications').select('id,appointment_id,message,created_at,read_at').order('created_at', { ascending: false }).limit(40),
-      ])
-      if (error) throw error
-      if (notesError) throw notesError
-      if (generation !== activeGeneration || !store) return
-      applyingRemote = true
-      try {
-        store.appointments.splice(0, store.appointments.length, ...(rows || []).map(toLocal))
-        serverSnapshot = new Map((rows || []).map(a => [a.id, compact(fields(toLocal(a)))]))
-      } finally { applyingRemote = false }
-      const latestNotes = notes || []
-      if (notificationsInitialized) {
-        const newNotes = latestNotes.filter(n => !knownNotifications.has(n.id))
-        for (const note of newNotes.reverse()) notifyLocally(note)
-      }
-      knownNotifications = new Set(latestNotes.map(n => n.id))
-      notificationsInitialized = true
-      syncState.notifications = latestNotes
-      syncState.lastUpdated = Date.now()
-      syncState.error = ''
-    } catch (e) {
-      syncState.error = `Sync failed: ${e.message || e}`
-      if (force) throw e
-    } finally { syncState.refreshing = false }
-  })()
-  try { return await refreshInFlight } finally { refreshInFlight = null }
+// Patient cancellation was deliberately removed. Only clinic staff may cancel.
+export async function cancelPatientAppointment() {
+  throw new Error('To cancel or reschedule an appointment, please call the clinic.')
 }
 
 function notifyLocally(note) {
@@ -361,30 +277,40 @@ export async function loadBusySlots(date, doctor) {
 }
 
 /** Save directly, so the UI shows success only after Supabase accepts the slot. */
+/** Backwards-compatible entry point: ignore any clinician passed by older UI. */
 export async function clinicflowBookPatient(payload) {
-  if (!cloudConfigured || !supabase) throw Error('Cloud booking is not available.')
-  const { data: auth, error: authError } = await supabase.auth.getUser()
-  if (authError || !auth?.user) throw Error('Please sign in before booking.')
-  const { error } = await supabase.rpc('clinicflow_book_my_appointment', {
-    p_doctor: payload.doctor,
-    p_date: payload.date,
-    p_time: payload.time,
-    p_symptom: payload.symptom,
-  })
-  if (error) {
-    if (error.code === '23505' || error.code === '23514')
-      throw Error('That appointment time is unavailable. Please select another 15-minute slot.')
-    throw Error(error.message || 'Booking failed.')
-  }
-  await refreshAll(true)
+  return clinicflowBookPatientAuto({ date: payload.date, time: payload.time, symptom: payload.symptom })
 }
 
-/** Only the authenticated patient can cancel their scheduled appointment. */
-export async function clinicflowCancelPatient(id) {
-  if (!cloudConfigured || !supabase) throw Error('Cloud cancellation is not available.')
+/** Patient cancellation is disabled by ClinicFlow policy and Supabase permissions. */
+export async function clinicflowCancelPatient() {
+  throw new Error('To cancel or reschedule an appointment, please call the clinic.')
+}
+
+/** Available times for a symptom category; clinician identities remain hidden. */
+export async function clinicflowPatientAvailableTimes(date, symptom) {
+  if (!cloudConfigured || !supabase) return []
   const { data: auth, error: authError } = await supabase.auth.getUser()
-  if (authError || !auth?.user) throw Error('Please sign in before cancelling.')
-  const { error } = await supabase.rpc('cancel_my_appointment', { target_appointment_id: id })
-  if (error) throw Error(error.message || 'Cancellation failed.')
+  if (authError || !auth?.user) throw new Error('Please sign in before checking available times.')
+  const { data, error } = await supabase.rpc('clinicflow_patient_available_times', {
+    p_date: date, p_symptom: symptom,
+  })
+  if (error) throw new Error(error.message || 'Could not load appointment availability.')
+  return (data || []).map(row => String(row.slot_time).slice(0, 5))
+}
+
+/** The database automatically selects the nurse/doctor and enforces unique slots. */
+export async function clinicflowBookPatientAuto({ date, time, symptom }) {
+  if (!cloudConfigured || !supabase) throw new Error('Cloud booking is not configured.')
+  const { data: auth, error: authError } = await supabase.auth.getUser()
+  if (authError || !auth?.user) throw new Error('Please sign in before booking.')
+  const { data, error } = await supabase.rpc('clinicflow_book_my_appointment_auto', {
+    p_date: date, p_time: time, p_symptom: symptom,
+  })
+  if (error) {
+    if (error.code === '23505') throw new Error('That appointment was just taken. Choose another time or date.')
+    throw new Error(error.message || 'Booking failed. Please try another time.')
+  }
   await refreshAll(true)
+  return data
 }

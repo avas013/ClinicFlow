@@ -1,103 +1,298 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { book, clinic, staff } from '../shared/demoStore.js'
-import { cloudConfigured, syncState, clinicflowBookPatient } from '../../services/clinicSync.js'
-import ClinicFifteenMinuteSlots from '../shared/ClinicFifteenMinuteSlots.vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { book, clinic } from '../shared/demoStore.js'
 import {
-  SYMPTOM_CHOICES, SYMPTOM_REASON, needsDoctor, allowedProviders, assertValidSlot,
+  cloudConfigured,
+  syncState,
+  clinicflowPatientAvailableTimes,
+  clinicflowBookPatientAuto,
+} from '../../services/clinicSync.js'
+import {
+  SYMPTOM_CHOICES,
+  SYMPTOM_REASON,
+  needsDoctor,
+  slotOccupied,
+  patientSlotOccupied,
 } from '../shared/clinicflowBookingRules.js'
 
-const emit = defineEmits(['booked'])
-const form = reactive({ symptom: '', doctor: '', date: '', time: '' })
-const error = ref('')
-const submitting = ref(false)
-const availableProviders = computed(() => allowedProviders(staff, form.symptom))
-const today = computed(() => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-})
-watch(() => form.symptom, () => {
-  form.doctor = ''
-  form.time = ''
-  error.value = ''
-})
-watch(() => form.doctor, () => { form.time = ''; error.value = '' })
-const urgencyMessage = computed(() => form.symptom === 'serious'
-  ? 'If symptoms are severe, sudden, or you may be having an emergency, call 911 or seek emergency care. An online appointment is not an emergency service.'
-  : 'This is a simple demo routing rule, not medical triage. Contact the clinic if you are unsure who to book with.')
+// Matches the active Supabase clinician roster. Names are not selectable by patients.
+const PROVIDERS = [
+  { name: 'Dr. Smith', kind: 'doctor', start: '08:00', end: '16:00' },
+  { name: 'Nurse Patel', kind: 'nurse', start: '08:30', end: '15:30' },
+  { name: 'Nurse Chen', kind: 'nurse', start: '08:30', end: '15:30' },
+]
 
+const props = defineProps({ initialDate: { type: String, default: '' } })
+const emit = defineEmits(['booked'])
+const form = reactive({ symptom: '', date: '', time: '' })
+const error = ref('')
+const availabilityError = ref('')
+const availabilityLoading = ref(false)
+const booking = ref(false)
+const remoteChoices = ref([])
+const dropdownOpen = ref(false)
+const timeToggle = ref(null)
+const viewingYear = ref(new Date().getFullYear())
+const viewingMonth = ref(new Date().getMonth())
+let requestId = 0
+
+const dateString = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const today = computed(() => dateString(new Date()))
+const patientName = computed(() => syncState.profile?.full_name || 'Jordan Taylor')
+const appointmentType = computed(() => needsDoctor(form.symptom) ? 'doctor' : 'nurse')
+const monthHeading = computed(() => new Date(viewingYear.value, viewingMonth.value, 1)
+  .toLocaleDateString('en-CA', { month: 'long', year: 'numeric' }))
+const canGoBackMonth = computed(() =>
+  viewingYear.value * 12 + viewingMonth.value > new Date().getFullYear() * 12 + new Date().getMonth())
+const calendarDays = computed(() => {
+  const leadingDays = new Date(viewingYear.value, viewingMonth.value, 1).getDay()
+  const daysInMonth = new Date(viewingYear.value, viewingMonth.value + 1, 0).getDate()
+  const length = Math.ceil((leadingDays + daysInMonth) / 7) * 7
+  return Array.from({ length }, (_, index) => {
+    const dayNumber = index - leadingDays + 1
+    if (dayNumber < 1 || dayNumber > daysInMonth) return null
+    const date = dateString(new Date(viewingYear.value, viewingMonth.value, dayNumber))
+    return { day: dayNumber, date, past: date < today.value }
+  })
+})
+const timeMinutes = value => {
+  const [hours, minutes] = value.split(':').map(Number)
+  return hours * 60 + minutes
+}
+const hhmm = minute => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
+const formatTime = time => {
+  const [hour, minute] = time.split(':').map(Number)
+  return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
+}
+const selectedDateLabel = computed(() => form.date
+  ? new Date(`${form.date}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })
+  : '')
+
+function setDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today.value) return
+  form.date = date
+  form.time = ''
+  dropdownOpen.value = true
+  error.value = ''
+  const parsed = new Date(`${date}T12:00:00`)
+  viewingYear.value = parsed.getFullYear()
+  viewingMonth.value = parsed.getMonth()
+}
+async function selectDate(date) {
+  setDate(date)
+  await nextTick()
+  timeToggle.value?.focus()
+}
+watch(() => props.initialDate, date => {
+  if (date) setDate(date)
+}, { immediate: true })
+function changeMonth(delta) {
+  const date = new Date(viewingYear.value, viewingMonth.value + delta, 1)
+  viewingYear.value = date.getFullYear()
+  viewingMonth.value = date.getMonth()
+}
+
+function providersAt(time) {
+  if (!form.symptom || !form.date) return []
+  return PROVIDERS.filter(provider => provider.kind === appointmentType.value
+    && timeMinutes(time) >= timeMinutes(provider.start)
+    && timeMinutes(time) + 15 <= timeMinutes(provider.end)
+    && !slotOccupied(clinic.appointments, provider.name, form.date, time))
+}
+function localAvailableTimes() {
+  if (!form.symptom || !form.date) return []
+  const times = []
+  for (let minute = 8 * 60; minute < 16 * 60; minute += 15) {
+    const time = hhmm(minute)
+    if (new Date(`${form.date}T${time}:00`) <= new Date()) continue
+    if (patientSlotOccupied(clinic.appointments, patientName.value, form.date, time)) continue
+    if (providersAt(time).length) times.push(time)
+  }
+  return times
+}
+const availableTimes = computed(() => cloudConfigured ? remoteChoices.value : localAvailableTimes())
+const displayedTimes = computed(() => {
+  if (!form.symptom || !form.date) return []
+  const pool = PROVIDERS.filter(provider => provider.kind === appointmentType.value)
+  const start = Math.min(...pool.map(provider => timeMinutes(provider.start)))
+  const end = Math.max(...pool.map(provider => timeMinutes(provider.end)))
+  const times = []
+  for (let minute = start; minute + 15 <= end; minute += 15) times.push(hhmm(minute))
+  return times
+})
+
+watch([() => form.symptom, () => form.date], async ([symptom, date]) => {
+  const currentRequest = ++requestId
+  form.time = ''
+  remoteChoices.value = []
+  error.value = ''
+  availabilityError.value = ''
+  availabilityLoading.value = false
+  dropdownOpen.value = Boolean(date)
+  if (!symptom || !date || !cloudConfigured) return
+  availabilityLoading.value = true
+  try {
+    const times = await clinicflowPatientAvailableTimes(date, symptom)
+    if (currentRequest === requestId) remoteChoices.value = times
+  } catch (cause) {
+    if (currentRequest === requestId) availabilityError.value = cause.message || 'Could not check availability.'
+  } finally {
+    if (currentRequest === requestId) availabilityLoading.value = false
+  }
+})
+
+function chooseTime(time) {
+  if (availabilityLoading.value || !availableTimes.value.includes(time)) return
+  form.time = time
+  dropdownOpen.value = false
+}
+function assignLocalClinician(time) {
+  const available = providersAt(time)
+  const active = appointment => !['cancelled', 'canceled', 'no show'].includes(String(appointment.status || '').toLowerCase())
+  available.sort((a, b) => {
+    const count = clinician => clinic.appointments.filter(appointment =>
+      appointment.date === form.date && appointment.doctor === clinician && active(appointment)).length
+    return count(a.name) - count(b.name) || a.name.localeCompare(b.name)
+  })
+  return available[0]?.name
+}
 async function submit() {
   error.value = ''
-  if (!SYMPTOM_REASON[form.symptom]) {
-    error.value = 'Choose the symptom that best describes the visit.'
+  if (!SYMPTOM_REASON[form.symptom] || !form.date || !form.time) {
+    error.value = 'Choose a concern, date and available time.'
     return
   }
-  if (!availableProviders.value.some(person => person.name === form.doctor)) {
-    error.value = 'Select a clinician shown for this symptom category.'
+  if (!availableTimes.value.includes(form.time)) {
+    error.value = 'That time is no longer available. Choose another time or date.'
+    dropdownOpen.value = true
     return
   }
+  booking.value = true
   try {
-    assertValidSlot(form, clinic.appointments)
-    submitting.value = true
-    const details = {
-      doctor: form.doctor, date: form.date, time: form.time,
-      reason: SYMPTOM_REASON[form.symptom], symptom: form.symptom,
-    }
     if (cloudConfigured) {
-      await clinicflowBookPatient(details)
+      // The database chooses the clinician and prevents concurrent double bookings.
+      await clinicflowBookPatientAuto({ date: form.date, time: form.time, symptom: form.symptom })
     } else {
-      const patient = syncState.profile?.full_name || 'Jordan Taylor'
-      book({ ...details, patient })
+      const clinician = assignLocalClinician(form.time)
+      if (!clinician) throw new Error('That time is no longer available.')
+      book({ patient: patientName.value, doctor: clinician, date: form.date,
+        time: form.time, reason: SYMPTOM_REASON[form.symptom] })
     }
     form.time = ''
-    form.date = ''
-    form.symptom = ''
     emit('booked')
   } catch (cause) {
-    error.value = cause.message || 'The appointment could not be booked. Please try another time.'
+    error.value = cause.message || 'Booking failed. Choose another time or date.'
+    dropdownOpen.value = true
+    if (cloudConfigured) {
+      try { remoteChoices.value = await clinicflowPatientAvailableTimes(form.date, form.symptom) }
+      catch { /* Keep the original booking error visible. */ }
+    }
   } finally {
-    submitting.value = false
+    booking.value = false
   }
 }
+
+const clinicPhone = import.meta.env.VITE_CLINIC_PHONE || ''
+const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
 </script>
 
 <template>
-  <form class="cf-patient-booking" @submit.prevent="submit">
-    <label for="cf-symptom">What symptoms or concerns are you having?</label>
+  <form class="cf-auto-booking" @submit.prevent="submit">
+    <label for="cf-symptom">What symptoms or concerns are you experiencing?</label>
     <select id="cf-symptom" v-model="form.symptom" required>
-      <option value="" disabled>Select a symptom or concern</option>
+      <option value="" disabled>Choose a reason for visiting</option>
       <option v-for="item in SYMPTOM_CHOICES" :key="item.value" :value="item.value">{{ item.label }}</option>
     </select>
-    <div v-if="form.symptom" class="cf-route-message" role="status">
-      <strong>{{ needsDoctor(form.symptom) ? 'Initial appointment with a doctor' : 'Initial appointment with a nurse' }}</strong>
-      <p>{{ needsDoctor(form.symptom)
-        ? 'Your concern is directed to a doctor for an initial appointment.'
-        : 'Your initial appointment is directed to a nurse. The clinic may refer you to a doctor if needed.' }}</p>
+    <div v-if="form.symptom" class="cf-route" role="status">
+      Your appointment will be assigned to {{ needsDoctor(form.symptom) ? 'the doctor' : 'an available nurse' }}.
+      You do not need to choose a clinician.
     </div>
-    <p class="cf-safety-message" role="note">{{ urgencyMessage }}</p>
-    <label for="cf-clinician">Choose clinician</label>
-    <select id="cf-clinician" v-model="form.doctor" :disabled="!availableProviders.length" required>
-      <option value="" disabled>{{ availableProviders.length ? 'Choose a clinician' : 'Choose a symptom first' }}</option>
-      <option v-for="person in availableProviders" :key="person.name" :value="person.name">{{ person.name }}</option>
-    </select>
-    <label for="cf-date">Appointment date</label>
-    <input id="cf-date" v-model="form.date" type="date" :min="today" required />
-    <label for="cf-time">Appointment time</label>
-    <ClinicFifteenMinuteSlots v-model="form.time" :date="form.date" :doctor="form.doctor" :appointments="clinic.appointments" :patient-name="syncState.profile?.full_name || 'Jordan Taylor'" />
+    <p class="cf-warning" role="note">This is a prototype booking rule, not clinical triage.
+      If symptoms are severe, sudden, or an emergency, call 911 or seek emergency care instead.</p>
+
+    <p class="cf-field-label">Choose an appointment date</p>
+    <div class="cf-calendar" aria-label="Appointment date calendar">
+      <div class="cf-month">
+        <button type="button" aria-label="Previous month" :disabled="!canGoBackMonth" @click="changeMonth(-1)">‹</button>
+        <strong>{{ monthHeading }}</strong>
+        <button type="button" aria-label="Next month" @click="changeMonth(1)">›</button>
+      </div>
+      <div class="cf-grid" role="group" aria-label="Calendar dates">
+        <span v-for="weekday in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="weekday" class="cf-weekday">{{ weekday }}</span>
+        <template v-for="(cell, index) in calendarDays" :key="index">
+          <span v-if="!cell" class="cf-blank" aria-hidden="true"></span>
+          <button v-else type="button" :disabled="cell.past" :aria-pressed="form.date === cell.date"
+            :class="{ selected: form.date === cell.date, today: cell.date === today }"
+            :aria-label="cell.date" @click="selectDate(cell.date)">{{ cell.day }}</button>
+        </template>
+      </div>
+    </div>
+
+    <div v-if="form.date" class="cf-time-field">
+      <label class="cf-field-label" for="cf-time-toggle">Available times for {{ selectedDateLabel }}</label>
+      <button id="cf-time-toggle" ref="timeToggle" type="button" class="cf-time-toggle"
+        :aria-expanded="dropdownOpen" aria-controls="cf-time-options" @click="dropdownOpen = !dropdownOpen">
+        <span>{{ form.time ? formatTime(form.time) : availabilityLoading ? 'Checking availability…' : 'Choose an available time' }}</span>
+        <span aria-hidden="true" class="cf-down-arrow" :class="{ open: dropdownOpen }">⌄</span>
+      </button>
+      <div v-if="dropdownOpen" id="cf-time-options" class="cf-time-dropdown" role="group" aria-label="15-minute appointment time options">
+        <p v-if="!form.symptom" class="cf-note">Choose your symptom category above to see available times.</p>
+        <p v-else-if="availabilityLoading" class="cf-note">Checking available clinicians…</p>
+        <p v-else-if="availabilityError" class="cf-error" role="alert">{{ availabilityError }}</p>
+        <template v-else>
+          <div class="cf-time-grid">
+            <button v-for="time in displayedTimes" :key="time" type="button"
+              :disabled="!availableTimes.includes(time) || booking"
+              :aria-pressed="form.time === time" :class="{ chosen: form.time === time }"
+              :title="availableTimes.includes(time) ? 'Available' : 'Already booked or unavailable'"
+              @click="chooseTime(time)">{{ formatTime(time) }}</button>
+          </div>
+          <p v-if="form.symptom && !availableTimes.length" class="cf-note">
+            No available appointments on this date. The calendar stays open—choose another date above.
+          </p>
+        </template>
+      </div>
+    </div>
     <p v-if="error" class="cf-error" role="alert">{{ error }}</p>
-    <button type="submit" :disabled="submitting || !form.symptom || !form.doctor || !form.date || !form.time">
-      {{ submitting ? 'Booking…' : 'Book appointment' }}
+    <p class="cf-call-note">To cancel or reschedule an appointment, please
+      <a v-if="phoneLink" :href="`tel:${phoneLink}`">call the clinic at {{ clinicPhone }}</a>
+      <span v-else>call the clinic</span>.
+    </p>
+    <button class="cf-book-button" type="submit"
+      :disabled="booking || availabilityLoading || !form.symptom || !form.date || !form.time">
+      {{ booking ? 'Booking…' : 'Book appointment' }}
     </button>
   </form>
 </template>
 
 <style scoped>
-.cf-patient-booking{display:grid;gap:10px;margin:12px 0 24px}
-.cf-patient-booking label{font-weight:700;color:#243c51;font-size:14px}
-.cf-patient-booking select,.cf-patient-booking input{width:100%;min-height:42px;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#243c51;font:inherit}
-.cf-patient-booking button{border:0;border-radius:9px;background:#2376b4;color:white;padding:12px;font-weight:700;cursor:pointer}
-.cf-patient-booking button:disabled{opacity:.55;cursor:not-allowed}
-.cf-route-message{padding:11px 12px;background:#edf5fe;border:1px solid #c6e0f9;border-radius:9px;font-size:13px;color:#164c75}
-.cf-route-message p{margin:4px 0 0}.cf-safety-message{background:#fff6e6;border-left:3px solid #d99024;border-radius:5px;padding:9px 10px;font-size:12px;color:#694516;margin:0}
-.cf-error{color:#b42318;margin:5px 0;font-size:13px}
+.cf-auto-booking{display:grid;gap:12px;margin:12px 0 25px;font-family:inherit}
+.cf-auto-booking>label,.cf-field-label{font-size:14px;font-weight:700;color:#294058}
+.cf-auto-booking>select{width:100%;min-height:43px;border:1px solid #c9d7e5;border-radius:9px;background:white;padding:10px;color:#294058;font:inherit}
+.cf-calendar{border:1px solid #d6e3ef;border-radius:13px;background:white;padding:10px}
+.cf-month{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:12px}
+.cf-month button{border:1px solid #d9e5ef;border-radius:8px;background:#f4f8fc;color:#30597a;min-width:40px;min-height:36px;font-size:24px;cursor:pointer}
+.cf-month button:disabled{opacity:.35;cursor:default}
+.cf-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.cf-weekday{font-weight:700;color:#648099;font-size:11px;padding:7px 1px}
+.cf-grid button{min-width:0;aspect-ratio:1;border:0;border-radius:8px;background:#f6f9fc;color:#315271;font:inherit;font-size:13px;cursor:pointer}
+.cf-grid button:hover:not(:disabled){background:#dbeaf9}.cf-grid button:disabled{opacity:.26;cursor:default}
+.cf-grid button.selected{background:#2676b6;color:white;font-weight:800}
+.cf-grid button.today:not(.selected){outline:1px solid #2676b6}
+.cf-route{padding:12px;background:#eaf4fc;color:#155680;border-radius:9px;font-size:13px}
+.cf-warning{font-size:12px;color:#64470d;background:#fff6e5;border-left:3px solid #ce8d30;padding:10px;margin:0}
+.cf-time-field{display:grid;gap:7px}
+.cf-time-toggle{width:100%;min-height:45px;border:1px solid #b9cee0;border-radius:9px;background:white;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;color:#294058;text-align:left;font:inherit;cursor:pointer}
+.cf-down-arrow{font-size:21px;display:inline-block;transition:transform .15s ease}.cf-down-arrow.open{transform:rotate(180deg)}
+.cf-time-dropdown{border:1px solid #b9cee0;border-radius:9px;background:white;padding:9px;max-height:240px;overflow-y:auto;box-shadow:0 5px 16px #1736531c}
+.cf-time-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.cf-time-grid button{font:inherit;font-size:12px;border:1px solid #c5d9e9;border-radius:7px;background:#f3f9ff;color:#245680;padding:10px 3px;cursor:pointer}
+.cf-time-grid button:disabled{color:#9a9a9a;background:#f0f0f0;opacity:.58;text-decoration:line-through;cursor:not-allowed}
+.cf-time-grid button.chosen{background:#2676b6;color:white;border-color:#2676b6}
+.cf-note{font-size:13px;background:#f2f7fc;color:#375875;padding:10px;border-radius:7px;margin:0}
+.cf-error{font-size:13px;color:#b42318;margin:0}
+.cf-call-note{color:#60778b;font-size:12px;margin:0}.cf-call-note a{color:#1c6398;text-decoration:underline}
+.cf-book-button{border:0;border-radius:9px;background:#2676b6;color:#fff;font-weight:700;font:inherit;padding:13px;cursor:pointer}
+.cf-book-button:disabled{opacity:.55;cursor:default}
+@media(max-width:380px){.cf-time-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
