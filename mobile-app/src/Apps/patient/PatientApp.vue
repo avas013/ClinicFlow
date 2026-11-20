@@ -1,10 +1,9 @@
 <script setup>
 import ClinicAppointmentActions from '../shared/ClinicAppointmentActions.vue'
 import PatientBookingFlow from './PatientBookingFlow.vue'
-import SlotPicker from '../shared/SlotPicker.vue'
 import { syncState, markRead } from '../../services/clinicSync.js'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { clinic, book, confirmAppointment, day, ordered, staff, queue } from '../shared/demoStore.js'
+import { clinic, confirmAppointment, day, ordered, queue } from '../shared/demoStore.js'
 import { language, t, formatDate, formatTime, countLabel } from '../../language.js'
 import PatientCalendar from './PatientCalendar.vue'
 
@@ -48,42 +47,13 @@ const currentPage = ref('home')
 const pageHistory = ref([])
 const statusMessage = ref('')
 const feedbackSent = ref(false)
-const booking = reactive({ doctor: 'Dr. Smith', date: day(), time: '' })
+const bookingDate = ref('')
 const feedback = reactive({ rating: '', message: '' })
 const appointmentDay = ref(day())
 const dailyAppointments = computed(() => sortedAppointments.value.filter(a => a.date === appointmentDay.value))
-const availableTimes = computed(() => slotsFor(booking.date))
-
-function minutes(value) {
-  const [time, period] = value.trim().split(' ')
-  const [hour, minute] = time.split(':').map(Number)
-  return (hour % 12 + (period === 'PM' ? 12 : 0)) * 60 + minute
-}
-
-function slotsFor(date) {
-  const provider = staff.find(person => person.name === booking.doctor)
-  if (!provider || date < day()) return []
-  const [start, end] = provider.shift.split('–').map(minutes)
-  const now = Date.now()
-  const active = clinic.appointments.filter(a =>
-    a.date === date && (a.doctor === booking.doctor || a.patient.toLowerCase() === patientName.value.toLowerCase()) &&
-    !['Cancelled', 'No show'].includes(a.status)
-  )
-  const slots = []
-  for (let startMinute = start; startMinute + 30 <= end; startMinute += 30) {
-    const time = `${String(Math.floor(startMinute / 60)).padStart(2, '0')}:${String(startMinute % 60).padStart(2, '0')}`
-    const overlaps = active.some(a => {
-      const [hour, minute] = a.time.split(':').map(Number)
-      return Math.abs(startMinute - (hour * 60 + minute)) < 30
-    })
-    if (new Date(`${date}T${time}:00`).getTime() > now && !overlaps) slots.push(time)
-  }
-  return slots
-}
-
+// A date chosen in the appointment calendar is passed to the new booking form.
 function selectBookingDate(date) {
-  booking.date = date
-  booking.time = ''
+  bookingDate.value = date
   statusMessage.value = ''
 }
 const queueLabel = computed(() => {
@@ -100,17 +70,6 @@ function openPage(page) {
   currentPage.value = page
   statusMessage.value = ''
 }
-import { cancelPatientAppointment } from '../../services/clinicSync.js'
-
-async function cancelVisit(appointment) {
-  if (!window.confirm('Cancel this appointment?')) return
-
-  try {
-    await cancelPatientAppointment(appointment.id)
-  } catch (error) {
-    window.alert(error.message || 'Could not cancel appointment.')
-  }
-}
 
 function goHome() {
   refreshTime()
@@ -120,22 +79,6 @@ function goHome() {
 function goBack() {
   if (pageHistory.value.length) currentPage.value = pageHistory.value.pop()
   else statusMessage.value = 'You are already on the home screen.'
-}
-function saveBooking() {
-  if (!slotsFor(booking.date).includes(booking.time)) {
-    booking.time = ''
-    statusMessage.value = 'That time is no longer available. Choose another time.'
-    return
-  }
-  try {
-    book({ patient: patientName.value, doctor: booking.doctor, date: booking.date, time: booking.time, reason: 'Consultation' })
-  } catch (error) {
-    statusMessage.value = error.message || 'That appointment slot is not available.'
-    return
-  }
-  booking.time = ''
-  goHome()
-  statusMessage.value = 'Appointment booked. Please confirm your attendance.'
 }
 function confirm(id) {
   if (confirmAppointment(id, patientName.value)) statusMessage.value = 'Appointment confirmed.'
@@ -284,7 +227,7 @@ function toggleAppointmentDetails(id) {
         <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
           <h1 class="section-heading">Book an appointment</h1>
-          <PatientBookingFlow @booked="goHome" />
+          <PatientBookingFlow :initial-date="bookingDate" @booked="goHome" />
         </section>
 
         <!-- FEEDBACK SCREEN -->
