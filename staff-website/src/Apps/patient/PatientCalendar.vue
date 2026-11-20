@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { day, niceDate } from '../shared/demoStore.js'
+import { day } from '../shared/demoStore.js'
+import { language, t, formatDate } from '../../language.js'
 
 const props = defineProps({
   selected: String,
@@ -11,8 +12,8 @@ const emit = defineEmits(['select'])
 const today = day()
 const now = props.selected ? new Date(`${props.selected}T12:00:00`) : new Date()
 const month = ref(new Date(now.getFullYear(), now.getMonth(), 1))
-const monthLabel = computed(() => month.value.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' }))
-const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const monthLabel = computed(() => month.value.toLocaleDateString(language.value === 'fr' ? 'fr-CA' : 'en-CA', { month: 'long', year: 'numeric' }))
+const weekdays = computed(() => Array.from({ length: 7 }, (_, index) => new Date(2026, 0, 4 + index, 12).toLocaleDateString(language.value === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'short' })))
 const days = computed(() => {
   const year = month.value.getFullYear()
   const monthIndex = month.value.getMonth()
@@ -31,11 +32,11 @@ function moveMonth(offset) {
 </script>
 
 <template>
-  <section class="calendar" aria-label="Appointment calendar">
+  <section class="calendar" :aria-label="t(&quot;Appointment calendar&quot;)">
     <div class="month">
-      <button type="button" aria-label="Previous month" @click="moveMonth(-1)">‹</button>
+      <button type="button" :aria-label="t(&quot;Previous month&quot;)" @click="moveMonth(-1)">‹</button>
       <strong aria-live="polite">{{ monthLabel }}</strong>
-      <button type="button" aria-label="Next month" @click="moveMonth(1)">›</button>
+      <button type="button" :aria-label="t(&quot;Next month&quot;)" @click="moveMonth(1)">›</button>
     </div>
     <div class="days">
       <span v-for="weekday in weekdays" :key="weekday" class="weekday">{{ weekday }}</span>
@@ -43,7 +44,7 @@ function moveMonth(offset) {
       <button
         v-for="entry in days" :key="entry.date" type="button"
         :aria-pressed="selected === entry.date"
-        :aria-label="niceDate(entry.date) + (entry.hasAppointment ? ', appointment booked' : '') + (available ? (entry.hasSlots ? ', times available' : ', no times available') : '')"
+        :aria-label="formatDate(entry.date) + (entry.hasAppointment ? ', ' + t('appointment booked') : '') + (available ? (entry.hasSlots ? ', ' + t('times available') : ', ' + t('no times available')) : '')"
         @click="emit('select', entry.date)"
       >
         {{ entry.number }}
@@ -52,7 +53,7 @@ function moveMonth(offset) {
         </span>
       </button>
     </div>
-    <div class="legend"><span><i class="booked"></i> Your appointment</span><span v-if="available"><i class="available"></i> Times available</span></div>
+    <div class="legend"><span><i class="booked"></i> {{ t("Your appointment") }}</span><span v-if="available"><i class="available"></i> {{ t("Times available") }}</span></div>
   </section>
 </template>
 

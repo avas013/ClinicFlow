@@ -1,4 +1,5 @@
 <script setup>
+import { language, t } from '../language.js'
 import { computed, ref } from 'vue'
 import { syncState, cloudConfigured, refreshNow, enableDesktopAlerts, markRead } from './clinicSync.js'
 const showNotifications = ref(false)
@@ -21,33 +22,33 @@ async function read(note) {
 </script>
 
 <template>
-  <section class="cf-syncbar" aria-label="Appointment synchronization">
+  <section class="cf-syncbar" :aria-label="t(&quot;Appointment synchronization&quot;)">
     <div class="cf-syncbar-left">
       <span class="cf-sync-indicator" :class="{ online: syncState.ready }"></span>
-      <span>{{ syncLabel }}</span>
-      <small v-if="syncState.lastUpdated">Last checked {{ new Date(syncState.lastUpdated).toLocaleTimeString() }}</small>
+      <span>{{ t(syncLabel) }}</span>
+      <small v-if="syncState.lastUpdated">{{ t("Last checked") }} {{ new Date(syncState.lastUpdated).toLocaleTimeString(language === 'fr' ? 'fr-CA' : 'en-CA') }}</small>
     </div>
     <div class="cf-syncbar-actions">
-      <button class="cf-sync-button" type="button" :disabled="syncState.refreshing || syncState.saving" @click="refreshNow">↻ Refresh</button>
+      <button class="cf-sync-button" type="button" :disabled="syncState.refreshing || syncState.saving" @click="refreshNow">{{ t("↻ Refresh") }}</button>
       <button class="cf-sync-button" type="button" :aria-expanded="showNotifications" @click="showNotifications = !showNotifications">
-        ♧ Notifications <span v-if="unread" class="cf-unread">{{ unread }}</span>
+        {{ t("♧ Notifications") }} <span v-if="unread" class="cf-unread">{{ unread }}</span>
       </button>
     </div>
   </section>
-  <p v-if="syncState.error" class="cf-sync-error" role="alert">{{ syncState.error }}</p>
-  <p v-if="syncState.toast" class="cf-sync-toast" role="status">{{ syncState.toast }}</p>
-  <section v-if="showNotifications" class="cf-sync-notes" aria-label="ClinicFlow notifications">
+  <p v-if="syncState.error" class="cf-sync-error" role="alert">{{ t(syncState.error) }}</p>
+  <p v-if="syncState.toast" class="cf-sync-toast" role="status">{{ t(syncState.toast) }}</p>
+  <section v-if="showNotifications" class="cf-sync-notes" :aria-label="t(&quot;ClinicFlow notifications&quot;)">
     <div class="cf-notes-heading">
-      <strong>Appointment notifications</strong>
-      <button type="button" @click="askForNotifications">Enable desktop alerts</button>
+      <strong>{{ t("Appointment notifications") }}</strong>
+      <button type="button" @click="askForNotifications">{{ t("Enable desktop alerts") }}</button>
     </div>
-    <p v-if="message" role="status">{{ message }}</p>
-    <p v-if="!syncState.notifications.length">No new notifications.</p>
+    <p v-if="message" role="status">{{ t(message) }}</p>
+    <p v-if="!syncState.notifications.length">{{ t("No new notifications.") }}</p>
     <article v-for="note in syncState.notifications" :key="note.id" class="cf-sync-note">
-      <div><p>{{ note.message }}</p><small>{{ new Date(note.created_at).toLocaleString() }}</small></div>
-      <button v-if="!note.read_at" type="button" @click="read(note)">Mark read</button>
+      <div><p>{{ note.message }}</p><small>{{ new Date(note.created_at).toLocaleString(language === 'fr' ? 'fr-CA' : 'en-CA') }}</small></div>
+      <button v-if="!note.read_at" type="button" @click="read(note)">{{ t("Mark read") }}</button>
     </article>
-    <small v-if="!cloudConfigured">Notifications require Supabase and a real signed-in account.</small>
+    <small v-if="!cloudConfigured">{{ t("Notifications require Supabase and a real signed-in account.") }}</small>
   </section>
 </template>
 

@@ -11,7 +11,7 @@ import {
   stopClinicSync
 } from './services/clinicSync.js'
 import PatientWebApp from './Apps/patient/PatientWebApp.vue'
-import { ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { language, t } from './language.js'
 import FrontDeskApp from './Apps/front-desk/FrontDeskApp.vue'
 import AdministratorApp from './Apps/administrator/AdministratorApp.vue'
@@ -50,6 +50,38 @@ const password = ref('')
 const error = ref('')
 const currentUser = ref(null)
 const loading = ref(false)
+const accountMenuOpen = ref(false)
+const accountHeader = ref(null)
+const accountMenuButton = ref(null)
+const headerText = (english, french) => language.value === 'fr' ? french : english
+const roleLabel = computed(() => ({
+  patient: headerText('Patient', 'Patient'),
+  doctor: headerText('Doctor / Nurse', 'Médecin / Personnel infirmier'),
+  frontdesk: headerText('Front Desk', 'Réception'),
+  admin: headerText('Administrator', 'Administration'),
+}[currentUser.value?.role] || 'ClinicFlow'))
+
+function closeAccountMenu() {
+  accountMenuOpen.value = false
+}
+async function escapeAccountMenu() {
+  if (!accountMenuOpen.value) return
+  closeAccountMenu()
+  await nextTick()
+  accountMenuButton.value?.focus()
+}
+function closeMenuOutside(event) {
+  if (accountHeader.value && !accountHeader.value.contains(event.target)) closeAccountMenu()
+}
+function focusWorkspace(event) {
+  event.preventDefault()
+  closeAccountMenu()
+  document.getElementById('website-workspace')?.focus()
+  window.scrollTo({ top: 0, behavior: 'instant' })
+}
+onMounted(() => document.addEventListener('pointerdown', closeMenuOutside))
+onUnmounted(() => document.removeEventListener('pointerdown', closeMenuOutside))
+
 
 // Login
 async function performSignIn() {
@@ -112,6 +144,7 @@ async function performSignIn() {
 
 // Logout
 function signOut() {
+  closeAccountMenu()
   stopClinicSync()
 
   if (cloudConfigured) {
@@ -137,7 +170,6 @@ async function signIn() {
 </script>
 
 <template>
-  <SyncToolbar v-if="currentUser" />
 
   <div class="staff-shell">
     <ClinicLanding v-if="!currentUser">
@@ -149,16 +181,7 @@ async function signIn() {
 
         <h1>ClinicFlow</h1>
         <p>{{ t('ClinicFlow Website') }}</p>
-        <p>Patients, doctors, nurses, front desk staff, and administrators can sign in here.</p>
-
-        <label class="language-picker">
-          <span>{{ t('Language') }}</span>
-
-          <select v-model="language">
-            <option value="en" lang="en">English</option>
-            <option value="fr" lang="fr">Français</option>
-          </select>
-        </label>
+        <p>{{ language === 'fr' ? 'Les patients, les médecins, le personnel infirmier, la réception et les administrateurs peuvent se connecter ici.' : 'Patients, doctors, nurses, front desk staff, and administrators can sign in here.' }}</p>
 
         <form @submit.prevent="signIn">
 
@@ -191,7 +214,7 @@ async function signIn() {
           </p>
 
           <button class="login-button" type="submit" :disabled="loading">
-            {{ loading ? 'Signing in…' : t('Sign in') }}
+            {{ loading ? (language === 'fr' ? 'Connexion…' : 'Signing in…') : t('Sign in') }}
           </button>
 
         </form>
@@ -204,26 +227,35 @@ async function signIn() {
     <!-- LOGGED-IN WEBSITE -->
     <template v-else>
 
-      <header class="staff-header">
-
-        <strong>
-          + ClinicFlow · {{ t('ClinicFlow Website') }}
-        </strong>
-
-        <label class="language-picker">
-          <span>{{ t('Language') }}</span>
-
-          <select v-model="language">
-            <option value="en" lang="en">English</option>
-            <option value="fr" lang="fr">Français</option>
-          </select>
-        </label>
-
-        <button type="button" @click="signOut">
-          {{ t('Log out') }}
-        </button>
-
+      <header ref="accountHeader" class="workspace-header" @keydown.esc.stop.prevent="escapeAccountMenu">
+        <div class="workspace-header-inner">
+          <strong class="workspace-brand">ClinicFlow</strong>
+          <div class="workspace-header-right">
+            <label class="header-language">
+              <span>{{ t('Language') }}</span>
+              <select v-model="language">
+                <option value="en" lang="en">English</option>
+                <option value="fr" lang="fr">Français</option>
+              </select>
+            </label>
+            <span class="role-label">{{ roleLabel }}</span>
+            <button ref="accountMenuButton" class="header-icon menu-toggle" type="button"
+              :aria-label="headerText('Account menu', 'Menu du compte')"
+              :aria-expanded="accountMenuOpen" aria-controls="account-navigation"
+              @click="accountMenuOpen = !accountMenuOpen">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+          </div>
+          <nav v-if="accountMenuOpen" id="account-navigation" class="account-menu"
+            :aria-label="headerText('Account navigation', 'Navigation du compte')">
+            <div class="menu-identity"><strong>{{ currentUser.name }}</strong><span>{{ currentUser.email }}</span></div>
+            <a href="#website-workspace" @click="focusWorkspace">{{ headerText('Your workspace', 'Votre espace de travail') }}</a>
+            <button type="button" @click="signOut">{{ t('Log out') }}</button>
+          </nav>
+        </div>
       </header>
+      <SyncToolbar />
+      <div id="website-workspace" tabindex="-1" class="website-workspace" :class="{ 'patient-workspace': currentUser.role === 'patient' }">
 
       <!-- PATIENT -->
       <PatientWebApp
@@ -247,6 +279,7 @@ async function signIn() {
       <AdministratorApp
         v-else-if="currentUser.role === 'admin'"
       />
+      </div>
 
     </template>
 
@@ -415,4 +448,49 @@ input {
 .clinic-landing :deep(.login-card p) { color: #526779; }
 .clinic-landing :deep(.login-card .error) { color: #a51e16; }
 .clinic-landing :deep(.login-card :focus-visible) { outline: 3px solid #174e7c; outline-offset: 3px; }
+</style>
+
+<style scoped>
+.workspace-header { position:sticky; top:0; z-index:1200; background:#fff; border-bottom:1px solid #d6e2ec; color:#20374e; }
+.workspace-header-inner { position:relative; display:flex; align-items:center; gap:20px; min-height:80px; max-width:1440px; padding:12px 28px; margin:auto; }
+.workspace-header-right { display:flex; align-items:center; gap:12px; }
+.workspace-header-right { margin-left:auto; }
+.workspace-brand { margin-left:0; text-align:left; font-size:1.25rem; letter-spacing:-.04em; }
+.header-icon { display:grid; place-items:center; flex-shrink:0; width:44px; height:44px; padding:10px; border:1px solid #d6e2ec; border-radius:9px; background:#fff; color:#315b7d; cursor:pointer; }
+.header-icon svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.placeholder-icon { color:#677c8f; background:#f6f9fc; cursor:default; }
+.menu-toggle:hover,.account-menu a:hover,.account-menu button:hover { background:#eef5fb; }
+.header-language { display:flex; align-items:center; gap:8px; font-size:.875rem; }
+.header-language select { min-height:44px; padding:8px 12px; background:#fff; color:#20374e; border:1px solid #8ba6bc; border-radius:8px; font:inherit; }
+.role-label { font-size:.95rem; font-weight:650; max-width:220px; line-height:1.35; }
+.account-menu { position:absolute; top:calc(100% - 1px); right:28px; width:290px; max-width:calc(100vw - 28px); padding:8px; background:#fff; border:1px solid #c5d6e5; border-radius:12px; box-shadow:0 12px 32px #20374e20; }
+.menu-identity { padding:12px; border-bottom:1px solid #e1eaf2; margin-bottom:6px; overflow-wrap:anywhere; }
+.menu-identity strong,.menu-identity span { display:block; }
+.menu-identity span { margin-top:5px; font-size:.875rem; color:#526779; }
+.account-menu a,.account-menu button { display:flex; align-items:center; min-height:46px; width:100%; text-align:left; background:white; border:0; border-radius:6px; padding:10px 12px; font:inherit; color:#205e94; text-decoration:none; cursor:pointer; }
+.workspace-header :focus-visible { outline:3px solid #174e7c; outline-offset:3px; }
+.website-workspace:focus { outline:none; }
+.patient-workspace :deep(.top-bar) { display:none; }
+@media(max-width:750px) {
+  .workspace-header-inner { gap:10px; padding:10px 14px; flex-wrap:wrap; }
+  .workspace-brand { font-size:1.1rem; }
+
+  .workspace-header-right { gap:10px; }
+  .header-language>span { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+  .header-language select { max-width:112px; padding-inline:7px; }
+  .role-label { max-width:130px; font-size:.875rem; }
+  .account-menu { right:14px; }
+}
+@media(max-width:430px) {
+  .workspace-header-inner { gap:8px; }
+  .workspace-header-right { display:contents; }
+  .header-language { margin-left:auto; }
+  .role-label { order:5; flex-basis:100%; max-width:none; text-align:right; padding-right:3px; }
+}
+</style>
+
+
+
+<style scoped>
+.workspace-header-inner { max-width:none; width:100%; margin-inline:0; padding-left:16px; }
 </style>

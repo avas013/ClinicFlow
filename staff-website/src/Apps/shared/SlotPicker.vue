@@ -1,4 +1,5 @@
 <script setup>
+import { t, formatTime } from '../../language.js'
 import { computed, ref, watch } from 'vue'
 import { loadBusySlots } from '../../services/clinicSync.js'
 import { isSlotTaken } from './bookingAvailability.js'
@@ -34,10 +35,9 @@ const slots = computed(() => Array.from({ length: 96 }, (_, index) => {
   const hour = Math.floor(index / 4)
   const minute = index % 4 * 15
   const value = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0')
-  const displayHour = hour % 12 || 12
   return {
     value,
-    label: displayHour + ':' + String(minute).padStart(2, '0') + (hour >= 12 ? ' PM' : ' AM'),
+    label: formatTime(value),
     taken: serverBusy.value.has(value) || isSlotTaken(props.appointments, props.doctor, props.date, value, props.excludeId),
   }
 }))
@@ -45,15 +45,15 @@ const slots = computed(() => Array.from({ length: 96 }, (_, index) => {
 
 <template>
   <div class="cf-slot-picker">
-    <select :value="modelValue" required aria-label="Appointment time" @change="emit('update:modelValue', $event.target.value)">
-      <option value="" disabled>Select an available 15-minute slot</option>
+    <select :value="modelValue" required :aria-label="t(&quot;Appointment time&quot;)" @change="emit('update:modelValue', $event.target.value)">
+      <option value="" disabled>{{ t("Select an available 15-minute slot") }}</option>
       <option v-for="slot in slots" :key="slot.value" :value="slot.value" :disabled="slot.taken">
-        {{ slot.label }}{{ slot.taken ? ' — Taken' : '' }}
+        {{ slot.label }}{{ slot.taken ? ' — ' + t('Taken') : '' }}
       </option>
     </select>
-    <small v-if="loading">Checking shared availability…</small>
-    <small v-else-if="remoteError" role="alert">{{ remoteError }}</small>
-    <small v-else>Greyed-out times are already booked for this clinician.</small>
+    <small v-if="loading">{{ t("Checking shared availability…") }}</small>
+    <small v-else-if="remoteError" role="alert">{{ t(remoteError) }}</small>
+    <small v-else>{{ t("Greyed-out times are already booked for this clinician.") }}</small>
   </div>
 </template>
 
