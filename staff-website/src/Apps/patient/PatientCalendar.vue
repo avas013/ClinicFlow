@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { day } from '../shared/demoStore.js'
 import { language, t, formatDate } from '../../language.js'
+import { CLINIC_DAYS, CLINIC_HOURS, isClinicWeekday } from '../../config/clinicDetails.js'
 
 const props = defineProps({
   selected: String,
@@ -22,7 +23,8 @@ const days = computed(() => {
     const number = index + 1
     const date = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(number).padStart(2, '0')}`
     const hasAppointment = props.appointments.some(appointment => appointment.date === date)
-    return { number, date, hasAppointment, hasSlots: date >= today && (props.available?.(date).length ?? 0) > 0 }
+    const closed = !isClinicWeekday(date)
+    return { number, date, closed, hasAppointment, hasSlots: !closed && date >= today && (props.available?.(date).length ?? 0) > 0 }
   })
 })
 
@@ -38,13 +40,16 @@ function moveMonth(offset) {
       <strong aria-live="polite">{{ monthLabel }}</strong>
       <button type="button" :aria-label="t(&quot;Next month&quot;)" @click="moveMonth(1)">›</button>
     </div>
+    <p class="calendar-hours">{{ CLINIC_DAYS }} · {{ CLINIC_HOURS }} · {{ t("Closed weekends") }}</p>
     <div class="days">
       <span v-for="weekday in weekdays" :key="weekday" class="weekday">{{ weekday }}</span>
       <span v-for="blank in month.getDay()" :key="'blank' + blank" aria-hidden="true"></span>
       <button
         v-for="entry in days" :key="entry.date" type="button"
         :aria-pressed="selected === entry.date"
-        :aria-label="formatDate(entry.date) + (entry.hasAppointment ? ', ' + t('appointment booked') : '') + (available ? (entry.hasSlots ? ', ' + t('times available') : ', ' + t('no times available')) : '')"
+        :disabled="Boolean(available) && (entry.closed || entry.date < today)"
+        :class="{ 'closed-day': entry.closed }"
+        :aria-label="formatDate(entry.date) + (entry.closed ? ', ' + t('Closed weekends') : '') + (entry.hasAppointment ? ', ' + t('appointment booked') : '') + (available ? (entry.hasSlots ? ', ' + t('times available') : ', ' + t('no times available')) : '')"
         @click="emit('select', entry.date)"
       >
         {{ entry.number }}
@@ -65,6 +70,9 @@ function moveMonth(offset) {
 button { min-height: 38px; border: 1px solid transparent; border-radius: 6px; background: #f4f7fb; color: #20384e; cursor: pointer; }
 .month button { min-width: 38px; font-size: 1.25rem; }
 button[aria-pressed="true"] { border-color: #195e96; background: #e2effb; }
+button.closed-day { background: #f2f2f2; color: #929aa3; }
+button:disabled { opacity: .6; cursor: not-allowed; }
+.calendar-hours { font-size: .76rem; margin: 9px 0; color: #52677c; }
 button:focus-visible { outline: 2px solid #195e96; outline-offset: 1px; }
 .markers { display: flex; justify-content: center; gap: 3px; min-height: 7px; }
 i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }

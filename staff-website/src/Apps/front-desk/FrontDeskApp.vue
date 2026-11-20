@@ -7,6 +7,7 @@ import {
   book, update, queue, moveQueue
 } from '../shared/demoStore.js'
 import { t, formatDate, formatTime } from '../../language.js'
+import { CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
 
 const tab = ref('appointments')
 const search = ref('')
@@ -43,7 +44,7 @@ function act(id, status) {
 <template>
   <div class="front-screen">
     <div class="front-wrap">
-      <div class="front-heading"><div><span>{{ t('Front Desk Portal') }}</span><h1>{{ t('Clinic operations') }}</h1><p>{{ formatDate(day()) }} · {{ t('Manage patient arrivals and appointments') }}</p></div><button class="front-primary" @click="showForm = !showForm">{{ showForm ? t('Close form') : '+ ' + t('New appointment') }}</button></div>
+      <div class="front-heading"><div><span>{{ t('Front Desk Portal') }}</span><h1>{{ t('Clinic operations') }}</h1><p>{{ formatDate(day()) }} · {{ t('Manage patient arrivals and appointments') }} · {{ CLINIC_DAYS }} {{ CLINIC_HOURS }}</p></div><button class="front-primary" @click="showForm = !showForm">{{ showForm ? t('Close form') : '+ ' + t('New appointment') }}</button></div>
       <div class="front-stats">
         <div><span>{{ t("Today's appointments") }}</span><strong>{{ today.length }}</strong></div>
         <div><span>{{ t('Waiting to be seen') }}</span><strong>{{ waiting.length }}</strong></div>

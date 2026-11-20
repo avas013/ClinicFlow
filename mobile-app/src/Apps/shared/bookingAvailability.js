@@ -1,3 +1,5 @@
+import { isClinicSlot } from '../../config/clinicDetails.js'
+
 /** Time-slot validation shared by patient, doctor and front desk. */
 const inactive = new Set(['cancelled', 'canceled', 'no show']);
 const minutes = time => {
@@ -24,6 +26,7 @@ export function isSlotTaken(appointments, doctor, date, time, excludeId = null) 
 export function assertBookableSlot(data, appointments, excludeId = null) {
   if (!data.doctor || !data.date || !data.time) throw Error('Choose a doctor, date and time.');
   if (!isQuarterHour(data.time)) throw Error('Appointments must start at :00, :15, :30 or :45.');
+  if (!isClinicSlot(data.date, data.time)) throw Error('Clinic appointments are Monday–Friday, 9:00 AM–5:00 PM (last start 4:45 PM).');
   if (isSlotTaken(appointments, data.doctor, data.date, data.time, excludeId))
     throw Error('That time is already booked. Choose one of the available time slots.');
   return true;

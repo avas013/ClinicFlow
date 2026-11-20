@@ -5,6 +5,7 @@ import { attachClinicStore, cloudConfigured, cloudLogin, cloudLogout, startClini
 import { clinic } from './Apps/shared/demoStore.js'
 import { ref } from 'vue'
 import { language, t } from './language.js'
+import { CLINIC_DAYS, CLINIC_HOURS, CLINIC_ADDRESS, CLINIC_PHONE, CLINIC_EMAIL } from './config/clinicDetails.js'
 import PatientApp from './Apps/patient/PatientApp.vue'
 import DoctorNurseApp from './Apps/doctor-nurse/DoctorNurseApp.vue'
 
@@ -92,6 +93,12 @@ function signOut() {
         <div class="logo">+</div>
         <h1>ClinicFlow</h1>
         <p>{{ t('Patient and Care Team') }}</p>
+        <div class="clinic-public-info" aria-label="Clinic hours and contact">
+          <p><strong>{{ t('Clinic hours') }}:</strong> {{ t(CLINIC_DAYS) }} · {{ t(CLINIC_HOURS) }}</p>
+          <p><strong>{{ t('Location') }}:</strong> {{ CLINIC_ADDRESS }}</p>
+          <p><strong>{{ t('Phone') }}:</strong> {{ CLINIC_PHONE }}</p>
+          <p><strong>{{ t('Contact email') }}:</strong> {{ CLINIC_EMAIL }}</p>
+        </div>
         <label class="language-picker">
           <span>{{ t('Language') }}</span>
           <select v-model="language">
@@ -153,6 +160,9 @@ function signOut() {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.clinic-public-info { font-size: 12px; line-height: 1.45; margin: 14px 0 12px; padding: 11px 13px; border: 1px solid #dce7f0; border-radius: 10px; background: #f8fbfe; overflow-wrap: anywhere; }
+.clinic-public-info p { margin: 4px 0; color: #4c6277; }
+.clinic-public-info strong { color: #294a69; }
 
 :global(body) {
   margin: 0;

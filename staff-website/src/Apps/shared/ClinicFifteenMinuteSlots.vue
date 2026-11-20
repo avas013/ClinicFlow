@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { cloudConfigured, loadBusySlots } from '../../services/clinicSync.js'
 import { slotOccupied, patientSlotOccupied } from './clinicflowBookingRules.js'
 import { staff } from './demoStore.js'
+import { isClinicWeekday, CLINIC_OPEN_HOUR, CLINIC_CLOSE_HOUR } from '../../config/clinicDetails.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -44,11 +45,12 @@ const shift = computed(() => {
   const bounds = String(person?.shift || '').split(/\s*[–—-]\s*/)
   const start = timeAsMinutes(bounds[0])
   const end = timeAsMinutes(bounds[1])
-  return start !== null && end !== null && end > start ? [start, end] : [8 * 60, 18 * 60]
+  return start !== null && end !== null && end > start ? [start, end] : [CLINIC_OPEN_HOUR * 60, CLINIC_CLOSE_HOUR * 60]
 })
 const choices = computed(() => {
   const [start, end] = shift.value
   const next = []
+  if (!isClinicWeekday(props.date)) return next
   for (let m = Math.ceil(start / 15) * 15; m + 15 <= end; m += 15) {
     const hour = Math.floor(m / 60)
     const minute = m % 60
@@ -65,7 +67,7 @@ const choices = computed(() => {
   }
   return next
 })
-const selectable = computed(() => Boolean(props.date && props.doctor) && !loading.value && !errorMessage.value)
+const selectable = computed(() => Boolean(props.date && props.doctor && isClinicWeekday(props.date)) && !loading.value && !errorMessage.value)
 </script>
 
 <template>
@@ -77,7 +79,8 @@ const selectable = computed(() => Boolean(props.date && props.doctor) && !loadin
         {{ choice.label }}{{ choice.unavailable ? ' — Taken / unavailable' : '' }}
       </option>
     </select>
-    <small v-if="errorMessage" class="cf15-error" role="alert">{{ errorMessage }}</small>
+    <small v-if="date && !isClinicWeekday(date)" class="cf15-error">Closed weekends. Choose Monday–Friday, 9:00 AM–5:00 PM.</small>
+    <small v-else-if="errorMessage" class="cf15-error" role="alert">{{ errorMessage }}</small>
     <small v-else class="cf15-hint">Greyed-out times are unavailable. Final availability is checked by the server.</small>
   </div>
 </template>

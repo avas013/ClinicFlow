@@ -59,6 +59,12 @@ export function formatShift(shift) {
 
 const french = Object.assign(Object.create(null), {
   'Language': 'Langue',
+  'Clinic hours': 'Heures d’ouverture',
+  'Location': 'Adresse',
+  'Phone': 'Téléphone',
+  'Contact email': 'Courriel de contact',
+  'Monday–Friday': 'Du lundi au vendredi',
+  '9:00 AM–5:00 PM': '9 h à 17 h',
   'Staff Portal': 'Portail du personnel',
   'Email address': 'Adresse courriel',
   'Password': 'Mot de passe',

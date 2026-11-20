@@ -4,6 +4,7 @@ import SlotPicker from '../shared/SlotPicker.vue'
 import { ref, computed, reactive } from 'vue'
 import { clinic, staff, day, ordered, update, book } from '../shared/demoStore.js'
 import { t, formatDate, formatTime, countLabel } from '../../language.js'
+import { CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
 
 const doctor = ref('Dr. Smith')
 const tab = ref('schedule')
@@ -20,7 +21,7 @@ function createVisit() {
 }
     return
   }
-  message.value = { text: 'Appointment booked for {patient}. The patient can now confirm it.', patient: newVisit.patient }
+  message.value = { text: 'Appointment booked for {patient}.', patient: newVisit.patient }
   showBooking.value = false
 }
 const mine = computed(() => ordered(clinic.appointments.filter(a => a.doctor === doctor.value)))
@@ -45,7 +46,7 @@ function rebook(a) {
   <div class="staff-screen">
     <div class="staff-wrap">
       <div class="staff-heading">
-        <div><p class="staff-overline">{{ t('Clinical workspace') }}</p><h1>{{ t('Good morning, care team') }}</h1><p class="staff-muted">{{ formatDate(day()) }}</p></div>
+        <div><p class="staff-overline">{{ t('Clinical workspace') }}</p><h1>{{ t('Good morning, care team') }}</h1><p class="staff-muted">{{ formatDate(day()) }} · Clinic hours: {{ CLINIC_DAYS }} {{ CLINIC_HOURS }}</p></div>
         <label class="staff-picker">{{ t('View schedule for') }}
           <select v-model="doctor"><option v-for="s in staff" :key="s.name" :value="s.name">{{ t(s.name) }}</option></select>
         </label>
