@@ -3,6 +3,7 @@ import './styles/doctor-web.css'
 import DoctorNurseApp from './Apps/doctor-nurse/DoctorNurseApp.vue'
 import SyncToolbar from './services/SyncToolbar.vue'
 import {
+  attachClinicStore,
   cloudConfigured,
   cloudLogin,
   cloudLogout,
@@ -10,6 +11,7 @@ import {
   stopClinicSync
 } from './services/clinicSync.js'
 import PatientWebApp from './Apps/patient/PatientWebApp.vue'
+import { clinic } from './Apps/shared/demoStore.js'
 import { ref } from 'vue'
 import { language, t } from './language.js'
 import FrontDeskApp from './Apps/front-desk/FrontDeskApp.vue'
@@ -17,6 +19,8 @@ import AdministratorApp from './Apps/administrator/AdministratorApp.vue'
 
 // Temporary development accounts.
 // Only used when Supabase is not configured.
+attachClinicStore(clinic)
+
 const accounts = [
   {
     email: 'doctor@clinicflow.demo',
