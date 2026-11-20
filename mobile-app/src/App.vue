@@ -1,7 +1,8 @@
 
 <script setup>
 import SyncToolbar from './services/SyncToolbar.vue'
-import { cloudConfigured, cloudLogin, cloudLogout, startClinicSync, stopClinicSync } from './services/clinicSync.js'
+import { attachClinicStore, cloudConfigured, cloudLogin, cloudLogout, startClinicSync, stopClinicSync } from './services/clinicSync.js'
+import { clinic } from './Apps/shared/demoStore.js'
 import { ref } from 'vue'
 import { language, t } from './language.js'
 import PatientApp from './Apps/patient/PatientApp.vue'
@@ -9,6 +10,8 @@ import DoctorNurseApp from './Apps/doctor-nurse/DoctorNurseApp.vue'
 
 // Temporary development accounts.
 // Replace with Supabase Auth before real deployment.
+attachClinicStore(clinic)
+
 const accounts = [
   {
     email: 'patient@clinicflow.demo',
@@ -41,11 +44,9 @@ async function signIn() {
     try {
       const signedIn = await cloudLogin(email.value, password.value)
       const role = signedIn.role === 'nurse' ? 'doctor' : signedIn.role
-      if (platform.value === 'mobile' && !['patient', 'doctor'].includes(role)) {
+      // This is the mobile application; it has no platform picker.
+      if (!['patient', 'doctor'].includes(role)) {
         throw new Error('This account is for the ClinicFlow website.')
-      }
-      if (platform.value === 'web' && !['patient', 'frontdesk', 'admin'].includes(role)) {
-        throw new Error('This account is for the mobile application.')
       }
       currentUser.value = { ...signedIn, role }
       password.value = ''

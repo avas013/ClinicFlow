@@ -167,6 +167,63 @@ export async function cancelPatientAppointment() {
   throw new Error('To cancel or reschedule an appointment, please call the clinic.')
 }
 
+export async function refreshAll(force = false, manual = false) {
+  if (!cloudConfigured) {
+    // This is a local demo, not shared storage.
+    syncState.toast = 'Local demo only. Set up Supabase to synchronize devices.'
+    return
+  }
+  if (!currentUserId) {
+    syncState.error = 'Sign in to synchronize appointments.'
+    return
+  }
+  // Do not overwrite an unsaved local booking if Refresh is clicked immediately.
+  if (!force && debounce && syncState.ready) {
+    clearTimeout(debounce)
+    debounce = null
+    await saveChanges()
+  }
+  // Realtime/poll/manual requests must not be dropped during an appointment save.
+  if (!force && savePromise) await savePromise
+  if (refreshInFlight) {
+    await refreshInFlight
+    if (!manual) return
+    // A manual click must make a NEW request, not reuse an older in-flight response.
+  }
+  const generation = activeGeneration
+  refreshInFlight = (async () => {
+    syncState.refreshing = true
+    try {
+      const [{ data: rows, error }, { data: notes, error: notesError }] = await Promise.all([
+        supabase.from('appointments').select('id,patient_id,patient,doctor,date,time,reason,status,confirmed,queue_position').order('date', { ascending: true }).order('time', { ascending: true }),
+        supabase.from('appointment_notifications').select('id,appointment_id,message,created_at,read_at').order('created_at', { ascending: false }).limit(40),
+      ])
+      if (error) throw error
+      if (notesError) throw notesError
+      if (generation !== activeGeneration || !store) return
+      applyingRemote = true
+      try {
+        store.appointments.splice(0, store.appointments.length, ...(rows || []).map(toLocal))
+        serverSnapshot = new Map((rows || []).map(a => [a.id, compact(fields(toLocal(a)))]))
+      } finally { applyingRemote = false }
+      const latestNotes = notes || []
+      if (notificationsInitialized) {
+        const newNotes = latestNotes.filter(n => !knownNotifications.has(n.id))
+        for (const note of newNotes.reverse()) notifyLocally(note)
+      }
+      knownNotifications = new Set(latestNotes.map(n => n.id))
+      notificationsInitialized = true
+      syncState.notifications = latestNotes
+      syncState.lastUpdated = Date.now()
+      syncState.error = ''
+    } catch (e) {
+      syncState.error = `Sync failed: ${e.message || e}`
+      if (force) throw e
+    } finally { syncState.refreshing = false }
+  })()
+  try { return await refreshInFlight } finally { refreshInFlight = null }
+}
+
 function notifyLocally(note) {
   syncState.toast = note.message
   if ('Notification' in window && Notification.permission === 'granted') {
