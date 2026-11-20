@@ -1,4 +1,7 @@
 <script setup>
+import ClinicAppointmentActions from '../shared/ClinicAppointmentActions.vue'
+import PatientBookingFlow from './PatientBookingFlow.vue'
+import SlotPicker from '../shared/SlotPicker.vue'
 import { syncState, markRead } from '../../services/clinicSync.js'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { clinic, book, confirmAppointment, day, ordered, staff, queue } from '../shared/demoStore.js'
@@ -97,6 +100,18 @@ function openPage(page) {
   currentPage.value = page
   statusMessage.value = ''
 }
+import { cancelPatientAppointment } from '../../services/clinicSync.js'
+
+async function cancelVisit(appointment) {
+  if (!window.confirm('Cancel this appointment?')) return
+
+  try {
+    await cancelPatientAppointment(appointment.id)
+  } catch (error) {
+    window.alert(error.message || 'Could not cancel appointment.')
+  }
+}
+
 function goHome() {
   refreshTime()
   currentPage.value = 'home'
@@ -184,6 +199,8 @@ function toggleAppointmentDetails(id) {
                     <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
                   </div>
                 </div>
+              
+                <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
               </article>
             </div>
             <p v-if="sortedAppointments.length === 0" class="empty-state">{{ t('No upcoming appointments.') }}</p>
@@ -245,6 +262,8 @@ function toggleAppointmentDetails(id) {
                     <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
                   </div>
                 </div>
+              
+                <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
               </article>
           </div>
           <button type="button" class="all-appointments-back" @click="goBack">← {{ t('Back to Home') }}</button>
@@ -264,23 +283,8 @@ function toggleAppointmentDetails(id) {
 
         <!-- BOOKING SCREEN -->
         <section v-else-if="currentPage === 'booking'" class="detail-screen" aria-labelledby="booking-heading">
-          <h1 id="booking-heading" class="section-heading">{{ t('Booking') }}</h1>
-          <p class="screen-description">{{ t('Choose a date and time to book an appointment.') }}</p>
-          <form class="form-stack" @submit.prevent="saveBooking">
-            <label for="doctor">{{ t('Doctor') }}</label>
-            <select id="doctor" v-model="booking.doctor" @change="selectBookingDate(booking.date)" required>
-              <option v-for="person in staff" :key="person.name">{{ person.name }}</option>
-            </select>
-            <PatientCalendar :selected="booking.date" :appointments="sortedAppointments" :available="slotsFor" @select="selectBookingDate" />
-            <p>{{ formatDate(booking.date) }}</p>
-            <label for="time">{{ t('Time') }}</label>
-            <select id="time" v-model="booking.time" :disabled="!availableTimes.length" required>
-              <option value="" disabled>{{ availableTimes.length ? 'Choose a time' : 'No times available' }}</option>
-              <option v-for="time in availableTimes" :key="time" :value="time">{{ formatTime(time) }}</option>
-            </select>
-            <p v-if="statusMessage" class="status-message" role="alert">{{ t(statusMessage) }}</p>
-            <button class="primary-button" type="submit" :disabled="!booking.time">{{ t('Book appointment') }}</button>
-          </form>
+          <h1 class="section-heading">Book an appointment</h1>
+          <PatientBookingFlow @booked="goHome" />
         </section>
 
         <!-- FEEDBACK SCREEN -->
@@ -360,6 +364,8 @@ function toggleAppointmentDetails(id) {
                     <p><strong>Bring:</strong> Your health card, a current medication list, and any relevant documents.</p>
                   </div>
                 </div>
+              
+                <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
               </article>
           </div>
           <p v-else class="empty-state">{{ t('No past appointments.') }}</p>
