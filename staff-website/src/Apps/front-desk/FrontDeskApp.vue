@@ -1,6 +1,7 @@
 <script setup>
 import ClinicFifteenMinuteSlots from '../shared/ClinicFifteenMinuteSlots.vue'
 import SlotPicker from '../shared/SlotPicker.vue'
+import AnnouncementComposer from './AnnouncementComposer.vue'
 import { ref, reactive, computed } from 'vue'
 import {
   clinic, staff, day, ordered,
@@ -65,6 +66,7 @@ function act(id, status) {
       <div class="front-tabs" role="group" :aria-label="t('Front desk sections')">
         <button :class="{ active: tab === 'appointments' }" @click="tab='appointments'">{{ t('Appointments') }}</button>
         <button :class="{ active: tab === 'queue' }" @click="tab='queue'">{{ t('Waiting list') }} <span>{{ waiting.length }}</span></button>
+        <button :class="{ active: tab === 'announcements' }" @click="tab='announcements'">{{ t('Announcements') }}</button>
       </div>
       <p v-if="notice" class="front-notice" role="status">{{ t(notice.text, { patient: notice.patient, status: notice.status && t(notice.status) }) }}</p>
       <section v-if="tab === 'appointments'" class="front-card">
@@ -74,7 +76,7 @@ function act(id, status) {
         </tbody></table></div>
         <p v-if="!matches.length" class="front-empty">{{ t('No matching appointments.') }}</p>
       </section>
-      <section v-else class="front-card">
+      <section v-else-if="tab === 'queue'" class="front-card">
         <div class="front-card-title"><div><h2>{{ t('Live waiting list') }}</h2><p>{{ t('Patients appear here after being checked in.') }}</p></div><span class="front-count">{{ t('{count} waiting', { count: waiting.length }) }}</span></div>
         <div v-for="(a, index) in waiting" :key="a.id" class="front-queue-row">
           <span class="front-position">{{ index + 1 }}</span>
@@ -87,6 +89,7 @@ function act(id, status) {
         </div>
         <p v-if="!waiting.length" class="front-empty">{{ t('No patients in the waiting list.') }}</p>
       </section>
+      <AnnouncementComposer v-else />
       <p class="front-footer">{{ t('Manage appointments and waiting order from the ClinicFlow Website.') }}</p>
     </div>
   </div>

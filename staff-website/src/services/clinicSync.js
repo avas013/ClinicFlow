@@ -141,10 +141,11 @@ export async function startClinicSync() {
   if (generation !== activeGeneration) return
   syncState.ready = true
   syncState.mode = 'cloud'
-  // Realtime is best-effort; the 45-second poll and manual refresh are independent.
+  // Realtime is best-effort; the 5-second poll and manual refresh are independent.
   channel = supabase.channel(`clinicflow-${user.id}-${Date.now()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => scheduleRefresh())
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'appointment_notifications' }, () => scheduleRefresh())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinicflow_announcements' }, () => scheduleRefresh())
     .subscribe(status => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') syncState.mode = 'polling'
       if (status === 'SUBSCRIBED') syncState.mode = 'cloud'
@@ -194,26 +195,42 @@ export async function refreshAll(force = false, manual = false) {
   refreshInFlight = (async () => {
     syncState.refreshing = true
     try {
-      const [{ data: rows, error }, { data: notes, error: notesError }] = await Promise.all([
+      const [{ data: rows, error }, { data: notes, error: notesError }, { data: announcements, error: announcementsError }] = await Promise.all([
         supabase.from('appointments').select('id,patient_id,patient,doctor,date,time,reason,status,confirmed,queue_position').order('date', { ascending: true }).order('time', { ascending: true }),
         supabase.from('appointment_notifications').select('id,appointment_id,message,event_type,created_at,read_at').order('created_at', { ascending: false }).limit(40),
+        supabase.from('clinicflow_announcements').select('id,message,category,created_at,read_at').order('created_at', { ascending: false }).limit(40),
       ])
       if (error) throw error
       if (notesError) throw notesError
+      if (announcementsError) throw announcementsError
       if (generation !== activeGeneration || !store) return
       applyingRemote = true
       try {
-        store.appointments.splice(0, store.appointments.length, ...(rows || []).map(toLocal))
-        serverSnapshot = new Map((rows || []).map(a => [a.id, compact(fields(toLocal(a)))]))
+        const nextAppointments = (rows || []).map(toLocal)
+        // Do not destroy and rebuild every appointment on an unchanged 5-second poll.
+        const changed = nextAppointments.length !== store.appointments.length ||
+          nextAppointments.some((a, i) => compact(a) !== compact(store.appointments[i]))
+        if (changed) store.appointments.splice(0, store.appointments.length, ...nextAppointments)
+        serverSnapshot = new Map(nextAppointments.map(a => [a.id, compact(fields(a))]))
       } finally { applyingRemote = false }
-      const latestNotes = notes || []
+      const latestNotes = [
+        ...(notes || []),
+        ...(announcements || []).map(note => ({
+          id: `announcement:${note.id}`,
+          appointment_id: null,
+          message: note.message,
+          event_type: 'announcement',
+          created_at: note.created_at,
+          read_at: note.read_at,
+        })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 40)
       if (notificationsInitialized) {
         const newNotes = latestNotes.filter(n => !knownNotifications.has(n.id))
         for (const note of newNotes.reverse()) notifyLocally(note)
       }
       knownNotifications = new Set(latestNotes.map(n => n.id))
       notificationsInitialized = true
-      syncState.notifications = latestNotes
+      if (compact(syncState.notifications) !== compact(latestNotes)) syncState.notifications = latestNotes
       syncState.lastUpdated = Date.now()
       syncState.error = ''
     } catch (e) {
@@ -238,7 +255,11 @@ export async function enableDesktopAlerts() {
 }
 export async function markRead(id) {
   if (!cloudConfigured || !currentUserId) return
-  const { error } = await supabase.from('appointment_notifications').update({ read_at: new Date().toISOString() }).eq('id', id)
+  const isAnnouncement = typeof id === 'string' && id.startsWith('announcement:')
+  const rowId = isAnnouncement ? Number(id.slice('announcement:'.length)) : id
+  if (isAnnouncement && !Number.isSafeInteger(rowId)) throw new Error('Invalid announcement ID.')
+  const table = isAnnouncement ? 'clinicflow_announcements' : 'appointment_notifications'
+  const { error } = await supabase.from(table).update({ read_at: new Date().toISOString() }).eq('id', rowId)
   if (error) syncState.error = error.message
   else await refreshAll()
 }
@@ -397,4 +418,26 @@ export async function submitMyVisitSurvey(payload) {
     additional_feedback: String(payload.additional_feedback || '').trim().slice(0, 3000),
   })
   if (error) throw error
+}
+
+/** Front-desk recipient picker (RLS only exposes the directory to authorized staff). */
+export async function listAnnouncementRecipients() {
+  if (!cloudConfigured || !currentUserId) throw new Error('Sign in to send announcements.')
+  const { data, error } = await supabase.from('profiles')
+    .select('id,full_name,role').in('role', ['patient', 'doctor', 'nurse']).order('full_name')
+  if (error) throw error
+  return data || []
+}
+
+/** Sending is validated by Supabase and authorized only for front-desk accounts. */
+export async function sendFrontDeskAnnouncement({ audience, recipientIds = [], message, category = 'general' }) {
+  if (!cloudConfigured || !currentUserId) throw new Error('A Supabase front-desk account is required.')
+  const { data, error } = await supabase.rpc('clinicflow_send_announcement', {
+    p_audience: audience,
+    p_recipient_ids: recipientIds,
+    p_message: message,
+    p_category: category,
+  })
+  if (error) throw error
+  return Number(data)
 }
