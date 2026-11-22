@@ -9,9 +9,26 @@ import { CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
 
 const tab = ref('overview')
 const period = ref('all')
+const reportSearch = ref('')
 const rows = computed(() => clinic.appointments.filter(a =>
   period.value === 'all' || a.date === day()
 ))
+
+function normalizeSearch(value) {
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
+
+const reportRows = computed(() => {
+  const query = normalizeSearch(reportSearch.value).trim()
+  if (!query) return ordered(rows.value)
+
+  const terms = query.split(/\s+/)
+  return ordered(rows.value.filter(({ patient, doctor, status }) => {
+    const searchable = normalizeSearch(`${patient} ${doctor} ${status} ${t(status)}`)
+    return terms.every(term => searchable.includes(term))
+  }))
+})
+
 const total = computed(() => rows.value.length)
 const cancelled = computed(() => rows.value.filter(a => a.status === 'Cancelled').length)
 const checked = computed(() => rows.value.filter(a => a.status === 'Checked in').length)
@@ -24,9 +41,9 @@ const perDoctor = computed(() => staff.map(s => ({
 const maxCount = computed(() => Math.max(1, ...perDoctor.value.map(s => s.count)))
 const waiting = computed(() => queue())
 
-function downloadReport() {
+function downloadReport(appointments = ordered(rows.value)) {
   const header = ['Patient', 'Clinician', 'Date', 'Time', 'Visit type', 'Status']
-  const cells = ordered(rows.value).map(a =>
+  const cells = appointments.map(a =>
     [a.patient, a.doctor, a.date, a.time, a.reason, a.status]
   )
   const csv = [header, ...cells]
@@ -57,7 +74,7 @@ function downloadReport() {
               <option value="today">{{ t('Today only') }}</option>
             </select>
           </label>
-          <button class="admin-export" type="button" @click="downloadReport">{{ t('Export CSV') }} ↗</button>
+          <button class="admin-export" type="button" @click="downloadReport()">{{ t('Export CSV') }} ↗</button>
         </div>
       </div>
 
@@ -155,13 +172,20 @@ function downloadReport() {
             <h2>{{ t('Appointment report') }}</h2>
             <p>{{ t('Changes made in Front Desk and Doctor/Nurse appear here.') }}</p>
           </div>
-          <button class="admin-export" type="button" @click="downloadReport">{{ t('Download CSV') }}</button>
+          <button class="admin-export" type="button" @click="downloadReport(reportRows)">{{ t('Download CSV') }}</button>
         </div>
+        <input
+          v-model="reportSearch"
+          class="admin-report-search"
+          type="search"
+          :aria-label="t('Search appointments')"
+          :placeholder="t('Search patient, clinician or status')"
+        />
         <div class="admin-table-wrap">
           <table>
             <thead><tr><th>{{ t('Patient') }}</th><th>{{ t('Date') }}</th><th>{{ t('Clinician') }}</th><th>{{ t('Type') }}</th><th>{{ t('Status') }}</th><th>{{ t('Confirmed') }}</th></tr></thead>
             <tbody>
-              <tr v-for="a in ordered(rows)" :key="a.id">
+              <tr v-for="a in reportRows" :key="a.id">
                 <td>{{ a.patient }}</td>
                 <td>{{ formatDate(a.date) }} · {{ formatTime(a.time) }}</td>
                 <td>{{ a.doctor }}</td>
@@ -172,7 +196,9 @@ function downloadReport() {
             </tbody>
           </table>
         </div>
-        <p v-if="!rows.length" class="admin-muted">{{ t('No records in this period.') }}</p>
+        <p v-if="!reportRows.length" class="admin-muted" role="status">
+          {{ t(rows.length ? 'No matching appointments.' : 'No records in this period.') }}
+        </p>
       </section>
       <p class="admin-footer"></p>
     </div>
@@ -204,6 +230,7 @@ function downloadReport() {
 .admin-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:25px}
 .admin-panel-head h2{font-size:19px;margin:0}
 .admin-panel-head p{color:#7e8da0;margin:7px 0 0;font-size:12px}
+.admin-report-search{box-sizing:border-box;width:100%;max-width:380px;margin-bottom:16px;padding:10px 12px;border:1px solid #cad9e6;border-radius:8px;background:#fff;color:#31495d;font:inherit}
 .admin-bar-row{margin-bottom:22px}
 .admin-bar-row>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:9px}
 .admin-bar-row span{color:#74889a}
