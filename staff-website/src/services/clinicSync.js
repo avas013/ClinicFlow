@@ -441,3 +441,36 @@ export async function sendFrontDeskAnnouncement({ audience, recipientIds = [], m
   if (error) throw error
   return Number(data)
 }
+
+/** Permission management: caller's admin status and main-admin status are checked by RLS. */
+export async function listClinicflowRoles() {
+  if (!cloudConfigured || !currentUserId) throw new Error('Sign in with a ClinicFlow administrator account.')
+  const [{ data: profiles, error: profilesError }, { data: owners, error: ownerError }] = await Promise.all([
+    supabase.from('profiles').select('id,full_name,role').order('full_name'),
+    supabase.from('clinicflow_main_admin').select('user_id').limit(1),
+  ])
+  if (profilesError) throw profilesError
+  if (ownerError) throw ownerError
+  if (!syncState.profile || syncState.profile.role !== 'admin' || !owners?.length) {
+    throw new Error('Administrator access is required.')
+  }
+  return {
+    users: profiles || [],
+    mainAdminId: owners[0].user_id,
+    currentUserId,
+  }
+}
+
+/** Only the Supabase RPC can update roles; never update profiles.role from the browser. */
+export async function changeClinicflowRole(targetId, nextRole) {
+  if (!cloudConfigured || !currentUserId) throw new Error('Sign in with a ClinicFlow administrator account.')
+  if (!['patient','doctor','nurse','frontdesk','admin'].includes(nextRole)) {
+    throw new Error('Invalid role selection.')
+  }
+  const { data, error } = await supabase.rpc('clinicflow_change_user_role', {
+    p_target: targetId,
+    p_new_role: nextRole,
+  })
+  if (error) throw error
+  return data
+}

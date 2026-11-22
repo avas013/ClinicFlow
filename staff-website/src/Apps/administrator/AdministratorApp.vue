@@ -6,6 +6,7 @@ import {
 } from '../shared/demoStore.js'
 import { t, formatDate, formatTime, formatShift, countLabel } from '../../language.js'
 import { CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
+import RolePermissions from './RolePermissions.vue'
 
 const tab = ref('overview')
 const period = ref('all')
@@ -74,6 +75,7 @@ function downloadReport() {
             ['overview', 'Overview'],
             ['staff', 'Staff schedule'],
             ['queue', 'Waiting list'],
+            ['permissions', 'Permissions'],
             ['reports', 'Reports']
           ]"
           :key="item[0]"
@@ -149,6 +151,7 @@ function downloadReport() {
         <p v-if="!waiting.length" class="admin-muted">{{ t('No patients currently waiting.') }}</p>
       </section>
 
+      <RolePermissions v-else-if="tab === 'permissions'" />
       <section v-else class="admin-panel">
         <div class="admin-panel-head">
           <div>
@@ -195,7 +198,7 @@ function downloadReport() {
 .admin-stats article{background:#fff;border:1px solid #e0e9f1;border-radius:13px;padding:21px}
 .admin-stats span,.admin-stats small{display:block;color:#71879b;font-size:12px}
 .admin-stats strong{display:block;font-size:35px;color:#246ca4;margin:8px 0}
-.admin-tabs{border-bottom:1px solid #d7e2eb;display:flex;gap:6px}
+.admin-tabs{border-bottom:1px solid #d7e2eb;display:flex;gap:6px;flex-wrap:wrap}
 .admin-tabs button{padding:13px 18px;background:none;border:0;border-bottom:3px solid transparent;color:#698199;font-weight:700;cursor:pointer}
 .admin-tabs button.active{border-bottom-color:#2474ae;color:#226398}
 .admin-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}
