@@ -1,14 +1,12 @@
 <script setup>
 import { ref } from 'vue'
+import { CLINIC_ADDRESS, CLINIC_PHONE, CLINIC_PHONE_LINK, CLINIC_DAYS, CLINIC_HOURS } from '../../config/clinicDetails.js'
 
 const props = defineProps({
   appointment: { type: Object, required: true },
   showDetails: { type: Boolean, default: true },
 })
 const expanded = ref(false)
-const officeAddress = import.meta.env.VITE_CLINIC_OFFICE_ADDRESS || 'Contact the clinic for its address.'
-const clinicPhone = import.meta.env.VITE_CLINIC_PHONE || ''
-const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
 </script>
 
 <template>
@@ -18,13 +16,14 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
       <span class="cf-arrow" :class="{ expanded }" aria-hidden="true">›</span>
     </button>
     <div v-if="showDetails && expanded" class="cf-extra">
-      <p><strong>Office address:</strong> {{ officeAddress }}</p>
+      <p><strong>Office address:</strong> {{ CLINIC_ADDRESS }}</p>
+      <p><strong>Clinic hours:</strong> {{ CLINIC_DAYS }} · {{ CLINIC_HOURS }}</p>
       <p><strong>Bring:</strong> Your health card, medication list, and relevant medical documents.</p>
       <p><strong>Appointment:</strong> {{ appointment.reason || 'Visit' }} with {{ appointment.doctor }}</p>
     </div>
     <p class="cf-call-note">To cancel or reschedule, please
-      <a v-if="phoneLink" :href="`tel:${phoneLink}`">call the clinic at {{ clinicPhone }}</a>
-      <span v-else>call the clinic</span>.
+      <a v-if="CLINIC_PHONE_LINK" :href="CLINIC_PHONE_LINK">call the clinic at {{ CLINIC_PHONE }}</a>
+      <span v-else>call the clinic at {{ CLINIC_PHONE }}</span>.
     </p>
   </div>
 </template>

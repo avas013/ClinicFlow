@@ -1,3 +1,5 @@
+import { isClinicSlot } from '../../config/clinicDetails.js'
+
 /* ClinicFlow prototype: symptom categories are routing preferences, not a clinical assessment. */
 export const SYMPTOM_CHOICES = [
   { value: 'headache', label: 'Headache' },
@@ -48,6 +50,7 @@ export const patientSlotOccupied = (appointments, patient, date, time) => {
 export function assertValidSlot(form, appointments) {
   if (!form.doctor || !form.date || !form.time) throw Error('Select a clinician, date and time.')
   if (!quarterHour(form.time)) throw Error('Use 15-minute appointment times (:00, :15, :30 or :45).')
+  if (!isClinicSlot(form.date, form.time)) throw Error('Clinic appointments are Monday–Friday, 9:00 AM–5:00 PM (last start 4:45 PM).')
   const dateTime = new Date(`${form.date}T${form.time}:00`)
   if (Number.isNaN(dateTime.getTime()) || dateTime <= new Date()) throw Error('Choose a future appointment.')
   if (slotOccupied(appointments, form.doctor, form.date, form.time)) throw Error('That slot is already booked. Choose another time.')

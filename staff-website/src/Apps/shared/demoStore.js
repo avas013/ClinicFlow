@@ -12,14 +12,14 @@ export const day = (offset = 0) => {
 }
 
 export const staff = [
-  { name: 'Dr. Smith', role: 'Family Physician', shift: '8:00 AM – 4:00 PM', room: 'Room 1' },
-  { name: 'Nurse Patel', role: 'Registered Nurse', shift: '8:30 AM – 3:30 PM', room: 'Room 2' },
-  { name: 'Nurse Chen', role: 'Registered Nurse', shift: '8:30 AM – 3:30 PM', room: 'Room 3' },
+  { name: 'Dr. Smith', role: 'Family Physician', shift: '9:00 AM – 5:00 PM', room: 'Room 1' },
+  { name: 'Nurse Patel', role: 'Registered Nurse', shift: '9:00 AM – 5:00 PM', room: 'Room 2' },
+  { name: 'Nurse Chen', role: 'Registered Nurse', shift: '9:00 AM – 5:00 PM', room: 'Room 3' },
 ]
 
 // Jordan Taylor is the patient account available on the login screen.
 const initialAppointments = [
-  { id: 1, patient: 'Jordan Taylor', doctor: 'Dr. Smith', date: day(1), time: '08:30', reason: 'Consultation', status: 'Scheduled', confirmed: false },
+  { id: 1, patient: 'Jordan Taylor', doctor: 'Dr. Smith', date: day(1), time: '09:00', reason: 'Consultation', status: 'Scheduled', confirmed: false },
   { id: 2, patient: 'Alex Morgan', doctor: 'Nurse Chen', date: day(), time: '09:00', reason: 'Follow-up', status: 'Scheduled', confirmed: false },
   { id: 3, patient: 'Casey Nguyen', doctor: 'Dr. Smith', date: day(), time: '09:30', reason: 'Consultation', status: 'Scheduled', confirmed: false },
   { id: 4, patient: 'Sam Rivera', doctor: 'Nurse Patel', date: day(), time: '10:00', reason: 'Check-up', status: 'Checked in', confirmed: true },

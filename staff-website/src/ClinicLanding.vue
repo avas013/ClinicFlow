@@ -74,6 +74,8 @@ const landingFrench = {
   'Location': 'Emplacement',
   'Clinic location will be added here once confirmed.': 'L’adresse de la clinique sera ajoutée après confirmation.',
   'Opening hours': 'Heures d’ouverture',
+  'Phone': 'Téléphone',
+  'Email': 'Courriel',
   'Opening hours will be added here once confirmed.': 'Les heures d’ouverture seront ajoutées après confirmation.',
   'Questions about your visit?': 'Des questions sur votre visite?',
   'Use the help page for account guidance and ways to contact the clinic.': 'Consultez la page d’aide pour obtenir des renseignements sur votre compte et les moyens de joindre la clinique.',
@@ -225,6 +227,12 @@ onUnmounted(() => window.removeEventListener('hashchange', navigate))
             <p class="eyebrow">{{ landingText("Your clinic, connected") }}</p>
             <h1 id="home-heading">{{ landingText("Care that fits") }}<br>{{ landingText("into your day") }}<span>.</span></h1>
             <p class="lead">{{ landingText("Appointments, updates, and your care team. A simpler way to stay connected with your clinic, all in one place.") }}</p>
+            <div class="landing-clinic-info" aria-label="Clinic information">
+              <p><strong>{{ landingText("Opening hours") }}:</strong> {{ hours }}</p>
+              <p><strong>{{ landingText("Location") }}:</strong> {{ address }}</p>
+              <p><strong>{{ landingText("Phone") }}:</strong> {{ phone }}</p>
+              <p><strong>{{ landingText("Email") }}:</strong> {{ contactEmail }}</p>
+            </div>
             <div class="actions"><a class="button" href="#signin">{{ landingText("Sign in to your account") }}</a><a class="button secondary" href="#about">{{ landingText("Get to know us") }}</a></div>
             <p class="new-patient">{{ landingText("New here?") }} <a href="#help" @click="requestAccess">{{ landingText("Find out how to get access") }}</a></p>
           </div>
@@ -283,7 +291,7 @@ onUnmounted(() => window.removeEventListener('hashchange', navigate))
             <details><summary>{{ landingText("What if I cannot sign in?") }}</summary><p>{{ landingText("Check your email address and password for typing errors. If you still need help, contact the clinic’s front desk. Never send your password in an inquiry.") }}</p></details>
             <details><summary>{{ landingText("Can I send a medical question here?") }}</summary><p>{{ landingText("Discuss medical questions directly with your care team through the clinic’s approved contact method. General account inquiries should exclude symptoms, health records, and other personal health information.") }}</p></details>
           </div>
-          <aside class="inquiry"><p class="eyebrow">{{ landingText("General inquiries") }}</p><h2>{{ landingText("Talk to the clinic.") }}</h2><p>{{ landingText("For appointments, registration, or accessibility support, reach out to the front desk.") }}</p><a v-if="contactEmail" :href="'mailto:' + contactEmail" class="text-link">{{ contactEmail }}</a><p v-else class="setup-note">{{ landingText("Clinic contact details are awaiting confirmation.") }}</p><a v-if="phone" :href="'tel:' + phone.replace(/[^+0-9]/g, '')" class="text-link">{{ phone }}</a><p class="small">{{ landingText("Please keep general inquiries free of medical or sensitive personal information.") }}</p></aside>
+          <aside class="inquiry"><p class="eyebrow">{{ landingText("General inquiries") }}</p><h2>{{ landingText("Talk to the clinic.") }}</h2><p>{{ landingText("For appointments, registration, or accessibility support, reach out to the front desk.") }}</p><a v-if="contactEmail && !contactEmail.startsWith('[')" :href="'mailto:' + contactEmail" class="text-link">{{ contactEmail }}</a><p v-else-if="contactEmail" class="setup-note">{{ contactEmail }}</p><p v-else class="setup-note">{{ landingText("Clinic contact details are awaiting confirmation.") }}</p><a v-if="phone && !phone.startsWith('[')" :href="'tel:' + phone.replace(/[^+0-9]/g, '')" class="text-link">{{ phone }}</a><p v-else-if="phone" class="setup-note">{{ phone }}</p><p class="small">{{ landingText("Please keep general inquiries free of medical or sensitive personal information.") }}</p></aside>
         </section>
         <section class="container resources section"><h2>{{ landingText("Trusted resources") }}</h2><a href="https://health811.ontario.ca/" rel="noreferrer">{{ landingText("Health811") }} <span>{{ landingText("Ontario health information and service navigation") }}</span></a><a href="https://www.ipc.on.ca/en/health-individuals/file-a-health-privacy-complaint/your-health-privacy-rights-in-ontario" rel="noreferrer">{{ landingText("Health privacy rights") }} <span>{{ landingText("Information and Privacy Commissioner of Ontario") }}</span></a><a href="https://www.ontario.ca/laws/statute/04p03" rel="noreferrer">{{ landingText("Ontario’s health privacy law") }} <span>{{ landingText("Personal Health Information Protection Act") }}</span></a></section>
       </template>
@@ -339,6 +347,9 @@ h1 span { color:var(--blue); }
 .lead { color:var(--muted); font-size:1.1rem; line-height:1.8; max-width:520px; margin:0 0 29px; }
 .actions { display:flex; gap:12px; flex-wrap:wrap; }
 .new-patient { color:var(--muted); font-size:.875rem; margin:22px 0 0; }
+.landing-clinic-info { background:#f7fafd; border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin:0 0 22px; font-size:.87rem; overflow-wrap:anywhere; }
+.landing-clinic-info p { margin:4px 0; color:var(--muted); }
+.landing-clinic-info strong { color:var(--ink); }
 .new-patient a { display:inline-block; padding-block:5px; }
 .hero-visual { background:#eaf3fb; border-radius:22px; padding:32px; border:1px solid #dfeaf4; position:relative; }
 .visual-heading { display:flex; gap:12px; align-items:center; font-size:.875rem; color:#345a78; margin:0 0 32px; }

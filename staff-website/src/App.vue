@@ -15,6 +15,7 @@ import PatientWebApp from './Apps/patient/PatientWebApp.vue'
 import { clinic } from './Apps/shared/demoStore.js'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { language, t } from './language.js'
+import { CLINIC_DAYS, CLINIC_HOURS, CLINIC_ADDRESS, CLINIC_PHONE, CLINIC_EMAIL } from './config/clinicDetails.js'
 import FrontDeskApp from './Apps/front-desk/FrontDeskApp.vue'
 import AdministratorApp from './Apps/administrator/AdministratorApp.vue'
 
@@ -176,7 +177,7 @@ async function signIn() {
 <template>
 
   <div class="staff-shell">
-    <ClinicLanding v-if="!currentUser">
+    <ClinicLanding v-if="!currentUser" :address="CLINIC_ADDRESS" :hours="language === 'fr' ? 'Du lundi au vendredi · 9 h–17 h' : CLINIC_DAYS + ' · ' + CLINIC_HOURS" :phone="CLINIC_PHONE" :contact-email="CLINIC_EMAIL">
       <template #signin>
         <div class="login-layout">
       <section class="login-card">

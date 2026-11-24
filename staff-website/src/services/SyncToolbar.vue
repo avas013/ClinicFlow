@@ -5,14 +5,10 @@ import { syncState, cloudConfigured, refreshNow, enableDesktopAlerts, markRead }
 const showNotifications = ref(false)
 const message = ref('')
 const unread = computed(() => syncState.notifications.filter(n => !n.read_at).length)
-const syncLabel = computed(() => {
-  if (!cloudConfigured) return 'Local demo — not shared'
-  if (syncState.refreshing) return 'Refreshing…'
-  if (syncState.saving) return 'Saving…'
-  if (syncState.mode === 'polling') return 'Online · checking every 5 seconds'
-  if (syncState.ready) return 'Synced · checks every 5 seconds'
-  return 'Not connected'
-})
+const connectionLabel = computed(() => !cloudConfigured
+  ? 'Local demo; not shared'
+  : syncState.ready ? 'Connected to ClinicFlow' : 'Connecting to ClinicFlow')
+
 async function askForNotifications() {
   message.value = await enableDesktopAlerts()
 }
@@ -24,9 +20,7 @@ async function read(note) {
 <template>
   <section class="cf-syncbar" :aria-label="t(&quot;Appointment synchronization&quot;)">
     <div class="cf-syncbar-left">
-      <span class="cf-sync-indicator" :class="{ online: syncState.ready }"></span>
-      <span>{{ t(syncLabel) }}</span>
-      <small v-if="syncState.lastUpdated">{{ t("Last checked") }} {{ new Date(syncState.lastUpdated).toLocaleTimeString(language === 'fr' ? 'fr-CA' : 'en-CA') }}</small>
+      <span class="cf-sync-indicator" :class="{ online: syncState.ready }" role="status" :aria-label="connectionLabel" :title="connectionLabel"></span>
     </div>
     <div class="cf-syncbar-actions">
       <button class="cf-sync-button" type="button" :disabled="syncState.refreshing || syncState.saving" @click="refreshNow">{{ t("↻ Refresh") }}</button>
@@ -39,7 +33,7 @@ async function read(note) {
   <p v-if="syncState.toast" class="cf-sync-toast" role="status">{{ t(syncState.toast) }}</p>
   <section v-if="showNotifications" class="cf-sync-notes" :aria-label="t(&quot;ClinicFlow notifications&quot;)">
     <div class="cf-notes-heading">
-      <strong>{{ t("Appointment notifications") }}</strong>
+      <strong>{{ t("Notifications") }}</strong>
       <button type="button" @click="askForNotifications">{{ t("Enable desktop alerts") }}</button>
     </div>
     <p v-if="message" role="status">{{ t(message) }}</p>
