@@ -24,14 +24,14 @@ const maxCount = computed(() => Math.max(1, ...perDoctor.value.map(s => s.count)
 const waiting = computed(() => queue())
 
 function downloadReport() {
-  const header = ['Patient', 'Clinician', 'Date', 'Time', 'Visit type', 'Status']
+  const header = ['Patient', 'Clinician', 'Date', 'Time', 'Visit type', 'Status'].map(label => t(label))
   const cells = ordered(rows.value).map(a =>
-    [a.patient, a.doctor, a.date, a.time, a.reason, a.status]
+    [a.patient, t(a.doctor), formatDate(a.date), formatTime(a.time), t(a.reason), t(a.status)]
   )
   const csv = [header, ...cells]
     .map(row => row.map(v => `"${String(v).replaceAll('"', '""')}"`).join(','))
     .join('\r\n')
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: 'text/csv;charset=utf-8;' }))
   const link = document.createElement('a')
   link.href = url
   link.download = 'ClinicFlow_appointment_report.csv'

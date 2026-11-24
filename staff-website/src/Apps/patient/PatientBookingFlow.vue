@@ -1,4 +1,5 @@
 <script setup>
+import { t, language, formatDate, formatTime as localizedTime } from '../../language.js'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { book, clinic } from '../shared/demoStore.js'
 import {
@@ -41,7 +42,7 @@ const today = computed(() => dateString(new Date()))
 const patientName = computed(() => syncState.profile?.full_name || 'Jordan Taylor')
 const appointmentType = computed(() => needsDoctor(form.symptom) ? 'doctor' : 'nurse')
 const monthHeading = computed(() => new Date(viewingYear.value, viewingMonth.value, 1)
-  .toLocaleDateString('en-CA', { month: 'long', year: 'numeric' }))
+  .toLocaleDateString(language.value === 'fr' ? 'fr-CA' : 'en-CA', { month: 'long', year: 'numeric' }))
 const canGoBackMonth = computed(() =>
   viewingYear.value * 12 + viewingMonth.value > new Date().getFullYear() * 12 + new Date().getMonth())
 const calendarDays = computed(() => {
@@ -60,12 +61,9 @@ const timeMinutes = value => {
   return hours * 60 + minutes
 }
 const hhmm = minute => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
-const formatTime = time => {
-  const [hour, minute] = time.split(':').map(Number)
-  return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
-}
+const formatTime = localizedTime
 const selectedDateLabel = computed(() => form.date
-  ? new Date(`${form.date}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })
+  ? new Date(`${form.date}T12:00:00`).toLocaleDateString(language.value === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', month: 'long', day: 'numeric' })
   : '')
 
 function setDate(date) {
@@ -198,27 +196,25 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
 
 <template>
   <form class="cf-auto-booking" @submit.prevent="submit">
-    <label for="cf-symptom">What symptoms or concerns are you experiencing?</label>
+    <label for="cf-symptom">{{ t("What symptoms or concerns are you experiencing?") }}</label>
     <select id="cf-symptom" v-model="form.symptom" required>
-      <option value="" disabled>Choose a reason for visiting</option>
-      <option v-for="item in SYMPTOM_CHOICES" :key="item.value" :value="item.value">{{ item.label }}</option>
+      <option value="" disabled>{{ t("Choose a reason for visiting") }}</option>
+      <option v-for="item in SYMPTOM_CHOICES" :key="item.value" :value="item.value">{{ t(item.label) }}</option>
     </select>
     <div v-if="form.symptom" class="cf-route" role="status">
-      Your appointment will be assigned to {{ needsDoctor(form.symptom) ? 'the doctor' : 'an available nurse' }}.
-      You do not need to choose a clinician.
+      {{ t('Your appointment will be assigned to {clinician}. You do not need to choose a clinician.', { clinician: t(needsDoctor(form.symptom) ? 'the doctor' : 'an available nurse') }) }}
     </div>
-    <p class="cf-warning" role="note">This is a prototype booking rule, not clinical triage.
-      If symptoms are severe, sudden, or an emergency, call 911 or seek emergency care instead.</p>
+    <p class="cf-warning" role="note">{{ t('This is a prototype booking rule, not clinical triage. If symptoms are severe, sudden, or an emergency, call 911 or seek emergency care instead.') }}</p>
 
-    <p class="cf-field-label">Choose an appointment date</p>
-    <div class="cf-calendar" aria-label="Appointment date calendar">
+    <p class="cf-field-label">{{ t("Choose an appointment date") }}</p>
+    <div class="cf-calendar" :aria-label="t('Appointment date calendar')">
       <div class="cf-month">
-        <button type="button" aria-label="Previous month" :disabled="!canGoBackMonth" @click="changeMonth(-1)">‹</button>
+        <button type="button" :aria-label="t('Previous month')" :disabled="!canGoBackMonth" @click="changeMonth(-1)">‹</button>
         <strong>{{ monthHeading }}</strong>
-        <button type="button" aria-label="Next month" @click="changeMonth(1)">›</button>
+        <button type="button" :aria-label="t('Next month')" @click="changeMonth(1)">›</button>
       </div>
-      <div class="cf-grid" role="group" aria-label="Calendar dates">
-        <span v-for="weekday in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="weekday" class="cf-weekday">{{ weekday }}</span>
+      <div class="cf-grid" role="group" :aria-label="t('Calendar dates')">
+        <span v-for="weekday in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="weekday" class="cf-weekday">{{ t(weekday) }}</span>
         <template v-for="(cell, index) in calendarDays" :key="index">
           <span v-if="!cell" class="cf-blank" aria-hidden="true"></span>
           <button v-else type="button" :disabled="cell.past" :aria-pressed="form.date === cell.date"
@@ -229,38 +225,38 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
     </div>
 
     <div v-if="form.date" class="cf-time-field">
-      <label class="cf-field-label" for="cf-time-toggle">Available times for {{ selectedDateLabel }}</label>
+      <label class="cf-field-label" for="cf-time-toggle">{{ t('Available times for {date}', { date: selectedDateLabel }) }}</label>
       <button id="cf-time-toggle" ref="timeToggle" type="button" class="cf-time-toggle"
         :aria-expanded="dropdownOpen" aria-controls="cf-time-options" @click="dropdownOpen = !dropdownOpen">
-        <span>{{ form.time ? formatTime(form.time) : availabilityLoading ? 'Checking availability…' : 'Choose an available time' }}</span>
+        <span>{{ form.time ? formatTime(form.time) : availabilityLoading ? t('Checking availability…') : t('Choose an available time') }}</span>
         <span aria-hidden="true" class="cf-down-arrow" :class="{ open: dropdownOpen }">⌄</span>
       </button>
-      <div v-if="dropdownOpen" id="cf-time-options" class="cf-time-dropdown" role="group" aria-label="15-minute appointment time options">
-        <p v-if="!form.symptom" class="cf-note">Choose your symptom category above to see available times.</p>
-        <p v-else-if="availabilityLoading" class="cf-note">Checking available clinicians…</p>
-        <p v-else-if="availabilityError" class="cf-error" role="alert">{{ availabilityError }}</p>
+      <div v-if="dropdownOpen" id="cf-time-options" class="cf-time-dropdown" role="group" :aria-label="t('15-minute appointment time options')">
+        <p v-if="!form.symptom" class="cf-note">{{ t("Choose your symptom category above to see available times.") }}</p>
+        <p v-else-if="availabilityLoading" class="cf-note">{{ t("Checking available clinicians…") }}</p>
+        <p v-else-if="availabilityError" class="cf-error" role="alert">{{ t(availabilityError) }}</p>
         <template v-else>
           <div class="cf-time-grid">
             <button v-for="time in displayedTimes" :key="time" type="button"
               :disabled="!availableTimes.includes(time) || booking"
               :aria-pressed="form.time === time" :class="{ chosen: form.time === time }"
-              :title="availableTimes.includes(time) ? 'Available' : 'Already booked or unavailable'"
+              :title="availableTimes.includes(time) ? t('Available') : t('Already booked or unavailable')"
               @click="chooseTime(time)">{{ formatTime(time) }}</button>
           </div>
           <p v-if="form.symptom && !availableTimes.length" class="cf-note">
-            No available appointments on this date. The calendar stays open—choose another date above.
+            {{ t("No available appointments on this date. The calendar stays open—choose another date above.") }}
           </p>
         </template>
       </div>
     </div>
-    <p v-if="error" class="cf-error" role="alert">{{ error }}</p>
-    <p class="cf-call-note">To cancel or reschedule an appointment, please
-      <a v-if="phoneLink" :href="`tel:${phoneLink}`">call the clinic at {{ clinicPhone }}</a>
-      <span v-else>call the clinic</span>.
+    <p v-if="error" class="cf-error" role="alert">{{ t(error) }}</p>
+    <p class="cf-call-note">{{ t("To cancel or reschedule an appointment, please") }}
+      <a v-if="phoneLink" :href="`tel:${phoneLink}`">{{ t('call the clinic at {phone}', { phone: clinicPhone }) }}</a>
+      <span v-else>{{ t("call the clinic") }}</span>.
     </p>
     <button class="cf-book-button" type="submit"
       :disabled="booking || availabilityLoading || !form.symptom || !form.date || !form.time">
-      {{ booking ? 'Booking…' : 'Book appointment' }}
+      {{ booking ? t('Booking…') : t('Book appointment') }}
     </button>
   </form>
 </template>

@@ -297,7 +297,7 @@ function toggleAppointmentDetails(id) {
                 </div>
               
                 <ClinicAppointmentActions :appointment="appointment" :show-details="false" />
-                <button v-if="appointment.status === 'Completed'" type="button" class="cf-history-survey-link" @click="openSurvey(appointment.id)">Rate this visit</button>
+                <button v-if="appointment.status === 'Completed'" type="button" class="cf-history-survey-link" @click="openSurvey(appointment.id)">{{ t('Rate this visit') }}</button>
               </article>
           </div>
           <p v-else class="empty-state">{{ t('No past appointments.') }}</p>

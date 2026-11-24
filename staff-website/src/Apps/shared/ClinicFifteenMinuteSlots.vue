@@ -1,4 +1,5 @@
 <script setup>
+import { t, formatTime as localizedTime } from '../../language.js'
 import { ref, computed, watch } from 'vue'
 import { cloudConfigured, loadBusySlots } from '../../services/clinicSync.js'
 import { slotOccupied, patientSlotOccupied } from './clinicflowBookingRules.js'
@@ -59,7 +60,7 @@ const choices = computed(() => {
       patientSlotOccupied(props.appointments, props.patientName, props.date, value)
     next.push({
       value,
-      label: `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`,
+      label: localizedTime(value),
       unavailable,
     })
   }
@@ -70,15 +71,15 @@ const selectable = computed(() => Boolean(props.date && props.doctor) && !loadin
 
 <template>
   <div class="cf15-wrapper">
-    <select :value="modelValue" :disabled="!selectable" required aria-label="Appointment time"
+    <select :value="modelValue" :disabled="!selectable" required :aria-label="t('Appointment time')"
       @change="emit('update:modelValue', $event.target.value)">
-      <option value="" disabled>{{ loading ? 'Checking availability…' : 'Choose a 15-minute appointment time' }}</option>
+      <option value="" disabled>{{ loading ? t('Checking availability…') : t('Choose a 15-minute appointment time') }}</option>
       <option v-for="choice in choices" :key="choice.value" :value="choice.value" :disabled="choice.unavailable">
-        {{ choice.label }}{{ choice.unavailable ? ' — Taken / unavailable' : '' }}
+        {{ choice.label }}{{ choice.unavailable ? t(' — Taken / unavailable') : '' }}
       </option>
     </select>
-    <small v-if="errorMessage" class="cf15-error" role="alert">{{ errorMessage }}</small>
-    <small v-else class="cf15-hint">Greyed-out times are unavailable. Final availability is checked by the server.</small>
+    <small v-if="errorMessage" class="cf15-error" role="alert">{{ t(errorMessage) }}</small>
+    <small v-else class="cf15-hint">{{ t("Greyed-out times are unavailable. Final availability is checked by the server.") }}</small>
   </div>
 </template>
 

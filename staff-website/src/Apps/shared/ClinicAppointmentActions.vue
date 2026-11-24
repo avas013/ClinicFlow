@@ -1,4 +1,5 @@
 <script setup>
+import { t } from '../../language.js'
 import { ref } from 'vue'
 
 const props = defineProps({
@@ -14,17 +15,17 @@ const phoneLink = clinicPhone.replace(/[^+\d]/g, '')
 <template>
   <div class="cf-actions" @click.stop>
     <button v-if="showDetails" class="cf-expand" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
-      <span>Appointment details</span>
+      <span>{{ t("Appointment details") }}</span>
       <span class="cf-arrow" :class="{ expanded }" aria-hidden="true">›</span>
     </button>
     <div v-if="showDetails && expanded" class="cf-extra">
-      <p><strong>Office address:</strong> {{ officeAddress }}</p>
-      <p><strong>Bring:</strong> Your health card, medication list, and relevant medical documents.</p>
-      <p><strong>Appointment:</strong> {{ appointment.reason || 'Visit' }} with {{ appointment.doctor }}</p>
+      <p><strong>{{ t("Office address:") }}</strong> {{ t(officeAddress) }}</p>
+      <p><strong>{{ t("Bring:") }}</strong> {{ t("Your health card, medication list, and relevant medical documents.") }}</p>
+      <p><strong>{{ t("Appointment:") }}</strong> {{ t(appointment.reason || 'Visit') }} {{ t('with') }} {{ t(appointment.doctor) }}</p>
     </div>
-    <p class="cf-call-note">To cancel or reschedule, please
-      <a v-if="phoneLink" :href="`tel:${phoneLink}`">call the clinic at {{ clinicPhone }}</a>
-      <span v-else>call the clinic</span>.
+    <p class="cf-call-note">{{ t("To cancel or reschedule, please") }}
+      <a v-if="phoneLink" :href="`tel:${phoneLink}`">{{ t('call the clinic at {phone}', { phone: clinicPhone }) }}</a>
+      <span v-else>{{ t("call the clinic") }}</span>.
     </p>
   </div>
 </template>
