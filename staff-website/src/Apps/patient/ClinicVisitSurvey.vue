@@ -1,4 +1,5 @@
 <script setup>
+import { t, formatDate, formatTime as localizedTime } from '../../language.js'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { cloudConfigured, listMyVisitSurveys, submitMyVisitSurvey, syncState } from '../../services/clinicSync.js'
 
@@ -86,41 +87,41 @@ async function submit() {
 
 <template>
   <div class="cf-visit-survey">
-    <p class="cf-intro">Share your experience after a doctor or nurse marks your appointment as completed. Each survey is linked to one visit.</p>
-    <p v-if="success" class="cf-message cf-success" role="status">{{ success }}</p>
-    <p v-if="error" class="cf-message cf-error" role="alert">{{ error }}</p>
-    <p v-if="!cloudConfigured" class="cf-message">Connect ClinicFlow to Supabase to submit a survey.</p>
-    <p v-else-if="syncState.profile?.role !== 'patient'" class="cf-message">Sign in as a patient to see your visit surveys.</p>
-    <p v-else-if="loading">Loading your completed visits…</p>
+    <p class="cf-intro">{{ t("Share your experience after a doctor or nurse marks your appointment as completed. Each survey is linked to one visit.") }}</p>
+    <p v-if="success" class="cf-message cf-success" role="status">{{ t(success) }}</p>
+    <p v-if="error" class="cf-message cf-error" role="alert">{{ t(error) }}</p>
+    <p v-if="!cloudConfigured" class="cf-message">{{ t("Connect ClinicFlow to Supabase to submit a survey.") }}</p>
+    <p v-else-if="syncState.profile?.role !== 'patient'" class="cf-message">{{ t("Sign in as a patient to see your visit surveys.") }}</p>
+    <p v-else-if="loading">{{ t("Loading your completed visits…") }}</p>
     <template v-else>
-      <p v-if="!pending.length" class="cf-message">No surveys awaiting your response. When your clinician completes a visit, the survey will appear here.</p>
+      <p v-if="!pending.length" class="cf-message">{{ t("No surveys awaiting your response. When your clinician completes a visit, the survey will appear here.") }}</p>
       <form v-if="pending.length" class="cf-survey-form" @submit.prevent="submit">
-        <label class="cf-label" for="cf-survey-appointment">Which recent visit are you rating?</label>
+        <label class="cf-label" for="cf-survey-appointment">{{ t("Which recent visit are you rating?") }}</label>
         <select id="cf-survey-appointment" v-model.number="selectedId" required>
-          <option :value="null" disabled>Select a completed visit</option>
-          <option v-for="visit in pending" :key="visit.id" :value="Number(visit.id)">{{ visit.date }} at {{ visit.time }} · {{ visit.doctor }}</option>
+          <option :value="null" disabled>{{ t("Select a completed visit") }}</option>
+          <option v-for="visit in pending" :key="visit.id" :value="Number(visit.id)">{{ formatDate(visit.date) }} · {{ localizedTime(visit.time) }} · {{ t(visit.doctor) }}</option>
         </select>
         <template v-if="selectedId !== null">
           <fieldset v-for="field in fields" :key="field.key" class="cf-rating-field">
-            <legend>{{ field.label }} <span aria-hidden="true">*</span></legend>
-            <div class="cf-stars" role="group" :aria-label="field.label">
+            <legend>{{ t(field.label) }} <span aria-hidden="true">*</span></legend>
+            <div class="cf-stars" role="group" :aria-label="t(field.label)">
               <button v-for="star in 5" :key="star" type="button" class="cf-star"
                 :class="{ selected: star <= ratings[field.key] }"
-                :aria-label="`${star} out of 5 stars for ${field.label}`"
+                :aria-label="t('{count} out of 5 stars for {label}', { count: star, label: t(field.label) })"
                 :aria-pressed="ratings[field.key] === star"
                 @click="ratings[field.key] = star">★</button>
-              <span class="cf-rating-value">{{ ratings[field.key] ? `${ratings[field.key]}/5` : 'Not rated' }}</span>
+              <span class="cf-rating-value">{{ ratings[field.key] ? `${ratings[field.key]}/5` : t('Not rated') }}</span>
             </div>
           </fieldset>
-          <label class="cf-label" for="cf-survey-feedback">Additional feedback (optional)</label>
-          <textarea id="cf-survey-feedback" v-model="additionalFeedback" rows="5" maxlength="3000" placeholder="Tell us anything else about your visit. Please avoid including sensitive medical details."></textarea>
-          <p class="cf-hint">Your answers are stored with this appointment. All five ratings are required; written feedback is optional.</p>
-          <button class="cf-submit" type="submit" :disabled="!readyToSubmit">{{ saving ? 'Submitting…' : 'Submit visit survey' }}</button>
+          <label class="cf-label" for="cf-survey-feedback">{{ t("Additional feedback (optional)") }}</label>
+          <textarea id="cf-survey-feedback" v-model="additionalFeedback" rows="5" maxlength="3000" :placeholder="t('Tell us anything else about your visit. Please avoid including sensitive medical details.')"></textarea>
+          <p class="cf-hint">{{ t("Your answers are stored with this appointment. All five ratings are required; written feedback is optional.") }}</p>
+          <button class="cf-submit" type="submit" :disabled="!readyToSubmit">{{ saving ? t('Submitting…') : t('Submit visit survey') }}</button>
         </template>
       </form>
       <section v-if="pastSubmitted.length" class="cf-previous-surveys">
-        <h2>Surveys you completed</h2>
-        <p v-for="visit in pastSubmitted" :key="visit.id">{{ visit.date }} · {{ visit.doctor }} — Survey submitted ✓</p>
+        <h2>{{ t("Surveys you completed") }}</h2>
+        <p v-for="visit in pastSubmitted" :key="visit.id">{{ formatDate(visit.date) }} · {{ t(visit.doctor) }} — {{ t('Survey submitted') }} ✓</p>
       </section>
     </template>
   </div>
